@@ -13,7 +13,7 @@ Private Sub SetAuthorizationHeader(ByRef http As Object, Optional apiKey As Vari
 End Sub
 
 Private Function BuildJsonPayload(ByVal modelName As String, ByVal fullPrompt As String, _
-                                    Optional ByVal temperature As Variant, Optional ByVal max_tokens As Variant) As String
+                                    Optional ByVal temperature As Variant, Optional ByVal maxTokens As Variant) As String
     Dim jsonPayload As String
     jsonPayload = "{" & _
                   """model"": """ & modelName & """," & _
@@ -29,10 +29,10 @@ Private Function BuildJsonPayload(ByVal modelName As String, ByVal fullPrompt As
         End If
     End If
     
-    ' 최대 토큰 (max_tokens) 추가
-    If Not IsMissing(max_tokens) And Not IsEmpty(max_tokens) Then
-        If IsNumeric(max_tokens) Then
-            jsonPayload = jsonPayload & ", ""max_tokens"": " & max_tokens
+    ' 최대 토큰 (maxTokens) 추가
+    If Not IsMissing(maxTokens) And Not IsEmpty(maxTokens) Then
+        If IsNumeric(maxTokens) Then
+            jsonPayload = jsonPayload & ", ""max_tokens"": " & maxTokens
         End If
     End If
     
@@ -114,12 +114,12 @@ Private Function UnescapeText(ByVal text As String) As String
 End Function
 
 
-Function LLM_Base(prompt As String, Optional temperature As Variant, Optional max_tokens As Variant, _
-                  Optional model As Variant, Optional base_url As Variant, Optional apiKey As Variant) As String
+Function LLM_Base(prompt As String, Optional temperature As Variant, Optional maxTokens As Variant, _
+                  Optional model As Variant, Optional baseUrl As Variant, Optional apiKey As Variant) As String
     Dim url As String
-    If Not IsMissing(base_url) And Not IsEmpty(base_url) Then
+    If Not IsMissing(baseUrl) And Not IsEmpty(baseUrl) Then
         Dim baseStr As String
-        baseStr = CStr(base_url)
+        baseStr = CStr(baseUrl)
         If Right(baseStr, 1) <> "/" Then baseStr = baseStr & "/"
         url = baseStr & "chat/completions"
     Else
@@ -136,7 +136,7 @@ Function LLM_Base(prompt As String, Optional temperature As Variant, Optional ma
     End If
     
     Dim jsonPayload As String
-    jsonPayload = BuildJsonPayload(modelName, EscapeText(prompt), temperature, max_tokens)
+    jsonPayload = BuildJsonPayload(modelName, EscapeText(prompt), temperature, maxTokens)
     
     Dim response As String
     response = SendLLMRequest(url, jsonPayload, apiKey)
@@ -191,19 +191,19 @@ Private Function ProcessLLMResponse(response As String, Optional showThink As Bo
 End Function
 
 Function LLM(prompt As String, Optional value As String = "", Optional temperature As Variant, _
-             Optional max_tokens As Variant, Optional model As Variant, Optional base_url As Variant, _
+             Optional maxTokens As Variant, Optional model As Variant, Optional baseUrl As Variant, _
              Optional showThink As Boolean = False, Optional apiKey As Variant) As Variant
     Dim fullPrompt As String
     fullPrompt = prompt
     If value <> "" Then fullPrompt = fullPrompt & " " & value
 
     Dim response As String
-    response = LLM_Base(fullPrompt, temperature, max_tokens, model, base_url, apiKey)
+    response = LLM_Base(fullPrompt, temperature, maxTokens, model, baseUrl, apiKey)
     LLM = ProcessLLMResponse(response, showThink)
 End Function
 
 Function LLM_SUMMARIZE(text As String, Optional prompt As String, Optional temperature As Variant, _
-                     Optional max_tokens As Variant, Optional model As Variant, Optional base_url As Variant, _
+                     Optional maxTokens As Variant, Optional model As Variant, Optional baseUrl As Variant, _
                      Optional showThink As Boolean = False, Optional apiKey As Variant) As Variant
     If prompt = "" Then
         prompt = "Summarize in one line:"
@@ -211,21 +211,21 @@ Function LLM_SUMMARIZE(text As String, Optional prompt As String, Optional tempe
     Dim fullPrompt As String
     fullPrompt = prompt & " " & text
     Dim response As String
-    response = LLM_Base(fullPrompt, temperature, max_tokens, model, base_url, apiKey)
+    response = LLM_Base(fullPrompt, temperature, maxTokens, model, baseUrl, apiKey)
     LLM_SUMMARIZE = ProcessLLMResponse(response, showThink)
 End Function
 
 Function LLM_CODE(programDetails As String, programmingLanguage As String, _
-                  Optional model As Variant, Optional base_url As Variant, _
+                  Optional model As Variant, Optional baseUrl As Variant, _
                   Optional showThink As Boolean = False, Optional apiKey As Variant) As Variant
     Dim prompt As String
     prompt = "Generate a " & programmingLanguage & " program that fulfills the following requirements:" & vbCrLf & programDetails
     Dim response As String
-    response = LLM_Base(prompt, 0.2, , model, base_url, apiKey)
+    response = LLM_Base(prompt, 0.2, , model, baseUrl, apiKey)
     LLM_CODE = ProcessLLMResponse(response, showThink)
 End Function
 
-Function LLM_LIST(prompt As String, Optional model As Variant, Optional base_url As Variant, _
+Function LLM_LIST(prompt As String, Optional model As Variant, Optional baseUrl As Variant, _
                   Optional showThink As Boolean = False, Optional apiKey As Variant) As Variant
     Dim listPrompt As String
     ' 영어 프롬프트에 출력 형식 예시를 포함하여, 모델이 <list>와 <item> 태그를 사용해 출력하도록 명시합니다.
@@ -235,7 +235,7 @@ Function LLM_LIST(prompt As String, Optional model As Variant, Optional base_url
                  "Please output only the list items enclosed within <list> and <item> tags, exactly in the above format, with no additional commentary."
     
     Dim response As String
-    response = LLM_Base(listPrompt, , , model, base_url, apiKey)
+    response = LLM_Base(listPrompt, , , model, baseUrl, apiKey)
     
     Dim processedResponse As Variant
     processedResponse = ProcessLLMResponse(response, showThink)
@@ -281,7 +281,7 @@ Function LLM_LIST(prompt As String, Optional model As Variant, Optional base_url
 End Function
 
 Function LLM_EDIT(text As String, Optional prompt As String, Optional temperature As Variant, _
-                  Optional max_tokens As Variant, Optional model As Variant, Optional base_url As Variant, _
+                  Optional maxTokens As Variant, Optional model As Variant, Optional baseUrl As Variant, _
                   Optional showThink As Boolean = False, Optional apiKey As Variant) As Variant
     ' 기본 프롬프트 설정: 사용자가 prompt를 입력하지 않은 경우
     If prompt = "" Then
@@ -294,8 +294,61 @@ Function LLM_EDIT(text As String, Optional prompt As String, Optional temperatur
     
     ' LLM에게 요청 전송
     Dim response As String
-    response = LLM_Base(fullPrompt, temperature, max_tokens, model, base_url, apiKey)
+    response = LLM_Base(fullPrompt, temperature, maxTokens, model, baseUrl, apiKey)
     
     ' 응답을 파싱하여 최종 결과를 반환합니다.
     LLM_EDIT = ProcessLLMResponse(response, showThink)
+End Function
+
+Function LLM_TRANSLATE(text As String, targetLang As String, Optional sourceLang As String = "", _
+                       Optional customPrompt As String = "", Optional temperature As Variant, _
+                       Optional maxTokens As Variant, Optional model As Variant, Optional baseUrl As Variant, _
+                       Optional showThink As Boolean = False, Optional apiKey As Variant) As Variant
+    Dim finalPrompt As String
+    
+    ' 만약 baseUrl이 Upstage API이고, 모델이 translation-enko 또는 translation-koen인 경우, 프롬프트를 무시하고 text만 사용합니다.
+    If baseUrl <> "" And LCase(baseUrl) = "https://api.upstage.ai/v1/solar" Then
+        If Not IsMissing(model) Then
+            If LCase(model) = "translation-enko" Or LCase(model) = "translation-koen" Then
+                finalPrompt = text
+            Else
+                ' 다른 모델인 경우 일반 프롬프트 생성
+                If customPrompt <> "" Then
+                    finalPrompt = customPrompt
+                Else
+                    If sourceLang <> "" Then
+                        finalPrompt = "Translate the following text from " & sourceLang & " to " & targetLang & ": " & text
+                    Else
+                        finalPrompt = "Translate the following text to " & targetLang & ": " & text
+                    End If
+                End If
+            End If
+        Else
+            ' model이 제공되지 않은 경우 기본 프롬프트 생성
+            If customPrompt <> "" Then
+                finalPrompt = customPrompt
+            Else
+                If sourceLang <> "" Then
+                    finalPrompt = "Translate the following text from " & sourceLang & " to " & targetLang & ": " & text
+                Else
+                    finalPrompt = "Translate the following text to " & targetLang & ": " & text
+                End If
+            End If
+        End If
+    Else
+        ' Upstage API가 아닌 경우 일반 프롬프트 생성
+        If customPrompt <> "" Then
+            finalPrompt = customPrompt
+        Else
+            If sourceLang <> "" Then
+                finalPrompt = "Translate the following text from " & sourceLang & " to " & targetLang & ": " & text
+            Else
+                finalPrompt = "Translate the following text to " & targetLang & ": " & text
+            End If
+        End If
+    End If
+
+    Dim response As String
+    response = LLM_Base(finalPrompt, temperature, maxTokens, model, baseUrl, apiKey)
+    LLM_TRANSLATE = ProcessLLMResponse(response, showThink)
 End Function

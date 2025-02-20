@@ -11,6 +11,7 @@ This repository provides a set of Excel VBA modules that integrate with local la
 - **LLM_CODE**: Generate code based on provided requirements.
 - **LLM_LIST**: Create a list with formatted output.
 - **LLM_EDIT**: Correct and improve a given sentence for clarity, grammar, and punctuation.
+- **LLM_TRANSLATE**: Translate text from a source language to a target language.
 - Modularized helper functions:
   - **BuildJsonPayload**: Constructs the JSON payload for the API request.
   - **SendLLMRequest**: Sends HTTP requests with detailed error reporting.
@@ -41,7 +42,8 @@ This repository provides a set of Excel VBA modules that integrate with local la
   `Please correct the following sentence for clarity, grammar, and punctuation:`  
   You can override this by providing a custom prompt if desired.  
     ![](img/usage_LLM_EDIT.png)
-
+- Use `=LLM_TRANSLATE(text, targetLang, [sourceLang], [customPrompt], [temperature], [maxTokens], [model], [base_url], [show_think], [apiKey])` to translate text. Note that for Upstage API's translation-enko or translation-koen models, the custom prompt parameter is ignored.
+    ![](img/usage_LLM_TRANSLATE.png)
 - Ensure your server URL is correctly configured, or pass it as the optional `base_url` parameter.
 
 ## License
