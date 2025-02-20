@@ -3,35 +3,8 @@ Option Explicit
 Const SERVER_URL As String = "http://localhost:1234/v1/chat/completions"
 Const DEFAULT_MODEL As String = "exaone-3.5-7.8b-instruct"
 
-Function LLM(prompt As String, Optional value As String = "", Optional temperature As Variant, Optional max_tokens As Variant, Optional model As Variant, Optional base_url As Variant) As String
-    Dim http As Object
-    Set http = CreateObject("MSXML2.XMLHTTP")
-
-    Dim url As String
-    ' base_url 인자가 제공되면 해당 주소에 "/v1/chat/completions"를 덧붙임
-    If Not IsMissing(base_url) And Not IsEmpty(base_url) Then
-        url = CStr(base_url) & "/v1/chat/completions"
-    Else
-        url = SERVER_URL
-    End If
-
-    ' 모델 설정: 지정되지 않으면 기본값 사용
-    Dim modelName As String
-    If IsMissing(model) Or IsEmpty(model) Then
-        modelName = DEFAULT_MODEL
-    Else
-        modelName = CStr(model)
-    End If
-
-    ' prompt와 value를 결합
-    Dim fullPrompt As String
-    If value = "" Then
-        fullPrompt = prompt
-    Else
-        fullPrompt = prompt & " " & value
-    End If
-
-    ' JSON 페이로드 생성
+Private Function BuildJsonPayload(ByVal modelName As String, ByVal fullPrompt As String, _
+                                    Optional ByVal temperature As Variant, Optional ByVal max_tokens As Variant) As String
     Dim jsonPayload As String
     jsonPayload = "{" & _
                   """model"": """ & modelName & """," & _
@@ -55,53 +28,114 @@ Function LLM(prompt As String, Optional value As String = "", Optional temperatu
     End If
 
     jsonPayload = jsonPayload & "}"
+    BuildJsonPayload = jsonPayload
+End Function
 
-    ' HTTP POST 요청 전송
-    On Error Resume Next
+Private Function SendLLMRequest(ByVal url As String, ByVal jsonPayload As String) As String
+    Dim http As Object
+    Set http = CreateObject("MSXML2.XMLHTTP")
+
+    On Error GoTo ErrorHandler
     http.Open "POST", url, False
     http.setRequestHeader "Content-Type", "application/json"
     http.send jsonPayload
 
     ' 응답 처리
     If http.Status = 200 Then
-        Dim response As String
-        response = http.responseText
-
-        Dim startPos As Integer
-        startPos = InStr(response, """content"": """) + Len("""content"": """)
-        Dim endPos As Integer
-        Dim quoteCount As Integer
-        Dim i As Integer
-
-        ' 이스케이프된 따옴표를 고려해 정확한 종료 위치 찾기
-        quoteCount = 0
-        i = startPos
-        Do While i <= Len(response)
-            If Mid(response, i, 1) = """" Then
-                If i = 1 Or Mid(response, i - 1, 1) <> "\" Then
-                    quoteCount = quoteCount + 1
-                    If quoteCount = 2 Then
-                        endPos = i
-                        Exit Do
-                    End If
-                End If
-            End If
-            i = i + 1
-        Loop
-
-        If endPos > startPos Then
-            Dim rawContent As String
-            ' 필요에 따라 불필요한 뒷부분 길이(여기서는 -23)를 조절할 수 있음
-            rawContent = Mid(response, startPos, endPos - startPos - 23)
-            ' 이스케이프된 따옴표를 일반 따옴표로 변환
-            LLM = Replace(rawContent, "\""", """")
-        Else
-            LLM = "Error: 응답 파싱 실패"
-        End If
+        SendLLMRequest = http.responseText
     Else
-        LLM = "Error: " & http.Status & " " & http.statusText
+        Dim serverMsg As String
+        serverMsg = http.responseText
+        If serverMsg <> "" Then
+            SendLLMRequest = "Error: " & http.Status & " " & http.statusText & " - " & serverMsg
+        Else
+            SendLLMRequest = "Error: " & http.Status & " " & http.statusText
+        End If
     End If
 
     On Error GoTo 0
     Set http = Nothing
+    Exit Function
+
+ErrorHandler:
+    Dim errMsg As String
+    errMsg = "Error: " & Err.Number & " " & Err.Description
+    If Err.Number = 12029 Then
+        errMsg = errMsg & " - Please ensure the correct URL is specified and the server is accessible on the network."
+    End If
+    SendLLMRequest = errMsg
+    On Error GoTo 0
+    Set http = Nothing
+End Function
+
+
+Private Function ExtractContent(ByVal response As String) As String
+    Dim regEx As Object
+    Set regEx = CreateObject("VBScript.RegExp")
+
+    regEx.Pattern = """content"":\s*""([\s\S]*?)""\s*(?:,|\})"
+    regEx.IgnoreCase = True
+    regEx.Global = False
+
+    Dim matches As Object
+    Set matches = regEx.Execute(response)
+
+    If matches.Count > 0 Then
+        ExtractContent = Replace(matches(0).SubMatches(0), "\""", """")
+    Else
+        ExtractContent = "Error: Failed to parse response"
+    End If
+End Function
+
+Function LLM_Base(prompt As String, Optional value As String = "", Optional temperature As Variant, _
+                  Optional max_tokens As Variant, Optional model As Variant, Optional base_url As Variant) As String
+    Dim url As String
+    If Not IsMissing(base_url) And Not IsEmpty(base_url) Then
+        url = CStr(base_url) & "/v1/chat/completions"
+    Else
+        url = SERVER_URL
+    End If
+
+    Dim modelName As String
+    If IsMissing(model) Or IsEmpty(model) Then
+        modelName = DEFAULT_MODEL
+    Else
+        modelName = CStr(model)
+    End If
+
+    Dim fullPrompt As String
+    If value = "" Then
+        fullPrompt = prompt
+    Else
+        fullPrompt = prompt & " " & value
+    End If
+
+    fullPrompt = Replace(fullPrompt, vbCrLf, "\n")
+    fullPrompt = Replace(fullPrompt, vbLf, "\n")
+
+    Dim jsonPayload As String
+    jsonPayload = BuildJsonPayload(modelName, fullPrompt, temperature, max_tokens)
+
+    Dim response As String
+    response = SendLLMRequest(url, jsonPayload)
+
+    If Left(response, 6) = "Error:" Then
+        LLM_Base = response
+        Exit Function
+    End If
+
+    LLM_Base = Replace(ExtractContent(response), "\n", vbLf)
+End Function
+
+Function LLM(prompt As String, Optional value As String = "", Optional temperature As Variant, _
+             Optional max_tokens As Variant, Optional model As Variant, Optional base_url As Variant) As String
+    LLM = LLM_Base(prompt, value, temperature, max_tokens, model, base_url)
+End Function
+
+Function LLM_SUMMARIZE(text As String, Optional prompt As String = "Summarize:", _
+                        Optional temperature As Variant, Optional max_tokens As Variant, _
+                        Optional model As Variant, Optional base_url As Variant) As String
+    Dim fullPrompt As String
+    fullPrompt = prompt & " " & text
+    LLM_SUMMARIZE = LLM_Base(fullPrompt, "", temperature, max_tokens, model, base_url)
 End Function
