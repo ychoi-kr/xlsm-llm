@@ -142,18 +142,76 @@ Function LLM_Base(prompt As String, Optional value As String = "", Optional temp
     LLM_Base = UnescapeText(ExtractContent(response))
 End Function
 
+' Private 함수: 문자열 앞부분에 있는 모든 줄 바꿈(CR, LF) 제거
+Private Function RemoveLeadingLineBreaks(ByVal text As String) As String
+    Do While Len(text) > 0
+        If Left(text, 1) = vbCr Or Left(text, 1) = vbLf Then
+            text = Mid(text, 2)
+        Else
+            Exit Do
+        End If
+    Loop
+    RemoveLeadingLineBreaks = text
+End Function
+
+' Private 함수: 응답을 처리하여 showThink 옵션에 따라 결과를 분리 반환
+Private Function ProcessLLMResponse(response As String, Optional showThink As Boolean = False) As Variant
+    Dim thinkStart As Long, thinkEnd As Long
+    Dim thinkContent As String, remainingContent As String
+    
+    thinkStart = InStr(1, response, "<think>")
+    thinkEnd = InStr(1, response, "</think>")
+    
+    If thinkStart > 0 And thinkEnd > 0 Then
+        ' <think> 태그 내부의 내용 추출
+        thinkContent = Mid(response, thinkStart + Len("<think>"), thinkEnd - thinkStart - Len("<think>"))
+        ' <think> 태그 전체를 제거하여 나머지 내용 확보 후 Trim으로 양쪽 공백 제거
+        remainingContent = Trim(Replace(response, Mid(response, thinkStart, thinkEnd - thinkStart + Len("</think>")), ""))
+    Else
+        thinkContent = ""
+        remainingContent = response
+    End If
+    
+    ' 두 결과 모두 선행 줄 바꿈 제거
+    thinkContent = RemoveLeadingLineBreaks(thinkContent)
+    remainingContent = RemoveLeadingLineBreaks(remainingContent)
+    
+    If showThink Then
+        ProcessLLMResponse = Array(thinkContent, remainingContent)
+    Else
+        ProcessLLMResponse = remainingContent
+    End If
+End Function
+
 Function LLM(prompt As String, Optional value As String = "", Optional temperature As Variant, _
-             Optional max_tokens As Variant, Optional model As Variant, Optional base_url As Variant) As String
-    LLM = LLM_Base(prompt, value, temperature, max_tokens, model, base_url)
+             Optional max_tokens As Variant, Optional model As Variant, Optional base_url As Variant, _
+             Optional showThink As Boolean = False) As Variant
+    Dim response As String
+    response = LLM_Base(prompt, value, temperature, max_tokens, model, base_url)
+    LLM = ProcessLLMResponse(response, showThink)
 End Function
 
 Function LLM_SUMMARIZE(text As String, Optional prompt As String, _
-                        Optional temperature As Variant, Optional max_tokens As Variant, _
-                        Optional model As Variant, Optional base_url As Variant) As String
+                     Optional temperature As Variant, Optional max_tokens As Variant, _
+                     Optional model As Variant, Optional base_url As Variant, _
+                     Optional showThink As Boolean = False) As Variant
     If prompt = "" Then
         prompt = "Summarize in one line:"
     End If
     Dim fullPrompt As String
     fullPrompt = prompt & " " & text
-    LLM_SUMMARIZE = LLM_Base(fullPrompt, "", temperature, max_tokens, model, base_url)
+    Dim response As String
+    response = LLM_Base(fullPrompt, "", temperature, max_tokens, model, base_url)
+    LLM_SUMMARIZE = ProcessLLMResponse(response, showThink)
 End Function
+
+Function LLM_CODE(programDetails As String, programmingLanguage As String, _
+                  Optional model As Variant, Optional base_url As Variant, _
+                  Optional showThink As Boolean = False) As Variant
+    Dim prompt As String
+    prompt = "Generate a " & programmingLanguage & " program that fulfills the following requirements:" & vbLf & programDetails
+    Dim response As String
+    response = LLM_Base(prompt, "", 0.2, , model, base_url)
+    LLM_CODE = ProcessLLMResponse(response, showThink)
+End Function
+

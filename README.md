@@ -24,10 +24,12 @@ This repository provides a set of Excel VBA modules that integrate with local la
 
 ## Usage
 
-- Use `=LLM(prompt, [value], [temperature], [max_tokens], [model], [base_url])` to get responses from your local LLM server.
+- Use `=LLM(prompt, [value], [temperature], [max_tokens], [model], [base_url], [show_think])` to get responses from your local LLM server.
     ![](img/usage_LLM.png)
-- Use `=LLM_SUMMARIZE(text, [prompt], [temperature], [max_tokens], [model], [base_url])` to generate summaries.
+- Use `=LLM_SUMMARIZE(text, [prompt], [temperature], [max_tokens], [model], [base_url], [show_think])` to generate summaries.
     ![](img/usage_LLM_SUMMARIZE.png)
+- Use `=LLM_CODE(program_detail, programming_language, [model], [base_url], [show_think])` to write code.
+    ![](img/usage_LLM_CODE.png)
 - Ensure your server URL is correctly configured, or pass it as the optional `base_url` parameter.
 
 ## License
