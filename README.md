@@ -18,7 +18,7 @@ This repository provides a set of Excel VBA modules that integrate with local la
 
 1. Clone the repository:
    ```sh
-   git clone https://github.com/your_username/xlsm-llm.git
+   git clone https://github.com/ychoi-kr/xlsm-llm.git
    ```
 2. Import the VBA modules from the `src` directory (e.g., `LLM_Functions.bas`) into your Excel workbook.
 
