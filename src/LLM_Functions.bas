@@ -34,7 +34,7 @@ End Function
 Private Function SendLLMRequest(ByVal url As String, ByVal jsonPayload As String) As String
     Dim http As Object
     Set http = CreateObject("MSXML2.XMLHTTP")
-
+    
     On Error GoTo ErrorHandler
     http.Open "POST", url, False
     http.setRequestHeader "Content-Type", "application/json"
@@ -52,7 +52,7 @@ Private Function SendLLMRequest(ByVal url As String, ByVal jsonPayload As String
             SendLLMRequest = "Error: " & http.Status & " " & http.statusText
         End If
     End If
-
+    
     On Error GoTo 0
     Set http = Nothing
     Exit Function
@@ -72,20 +72,36 @@ End Function
 Private Function ExtractContent(ByVal response As String) As String
     Dim regEx As Object
     Set regEx = CreateObject("VBScript.RegExp")
-
+    
     regEx.Pattern = """content"":\s*""([\s\S]*?)""\s*(?:,|\})"
     regEx.IgnoreCase = True
     regEx.Global = False
-
+    
     Dim matches As Object
     Set matches = regEx.Execute(response)
-
+    
     If matches.Count > 0 Then
         ExtractContent = Replace(matches(0).SubMatches(0), "\""", """")
     Else
         ExtractContent = "Error: Failed to parse response"
     End If
 End Function
+
+Private Function EscapeText(ByVal text As String) As String
+    Dim result As String
+    result = Replace(text, "\", "\\")
+    result = Replace(result, vbCrLf, "\n")
+    result = Replace(result, vbLf, "\n")
+    EscapeText = result
+End Function
+
+Private Function UnescapeText(ByVal text As String) As String
+    Dim result As String
+    result = Replace(text, "\n", vbLf)
+    result = Replace(result, "\\", "\")
+    UnescapeText = result
+End Function
+
 
 Function LLM_Base(prompt As String, Optional value As String = "", Optional temperature As Variant, _
                   Optional max_tokens As Variant, Optional model As Variant, Optional base_url As Variant) As String
@@ -95,36 +111,35 @@ Function LLM_Base(prompt As String, Optional value As String = "", Optional temp
     Else
         url = SERVER_URL
     End If
-
+    
     Dim modelName As String
     If IsMissing(model) Or IsEmpty(model) Then
         modelName = DEFAULT_MODEL
     Else
         modelName = CStr(model)
     End If
-
+    
     Dim fullPrompt As String
     If value = "" Then
         fullPrompt = prompt
     Else
         fullPrompt = prompt & " " & value
     End If
-
-    fullPrompt = Replace(fullPrompt, vbCrLf, "\n")
-    fullPrompt = Replace(fullPrompt, vbLf, "\n")
-
+    
+    fullPrompt = EscapeText(fullPrompt)
+    
     Dim jsonPayload As String
     jsonPayload = BuildJsonPayload(modelName, fullPrompt, temperature, max_tokens)
-
+    
     Dim response As String
     response = SendLLMRequest(url, jsonPayload)
-
+    
     If Left(response, 6) = "Error:" Then
         LLM_Base = response
         Exit Function
     End If
-
-    LLM_Base = Replace(ExtractContent(response), "\n", vbLf)
+    
+    LLM_Base = UnescapeText(ExtractContent(response))
 End Function
 
 Function LLM(prompt As String, Optional value As String = "", Optional temperature As Variant, _
@@ -132,9 +147,12 @@ Function LLM(prompt As String, Optional value As String = "", Optional temperatu
     LLM = LLM_Base(prompt, value, temperature, max_tokens, model, base_url)
 End Function
 
-Function LLM_SUMMARIZE(text As String, Optional prompt As String = "Summarize:", _
+Function LLM_SUMMARIZE(text As String, Optional prompt As String, _
                         Optional temperature As Variant, Optional max_tokens As Variant, _
                         Optional model As Variant, Optional base_url As Variant) As String
+    If prompt = "" Then
+        prompt = "Summarize in one line:"
+    End If
     Dim fullPrompt As String
     fullPrompt = prompt & " " & text
     LLM_SUMMARIZE = LLM_Base(fullPrompt, "", temperature, max_tokens, model, base_url)
