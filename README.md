@@ -30,6 +30,8 @@ This repository provides a set of Excel VBA modules that integrate with local la
     ![](img/usage_LLM_SUMMARIZE.png)
 - Use `=LLM_CODE(program_detail, programming_language, [model], [base_url], [show_think])` to write code.
     ![](img/usage_LLM_CODE.png)
+- Use `=LLM_LIST(prompt, [model], [base_url], [show_think]) to create a list.
+    ![](img/usage_LLM_LIST.png)
 - Ensure your server URL is correctly configured, or pass it as the optional `base_url` parameter.
 
 ## License

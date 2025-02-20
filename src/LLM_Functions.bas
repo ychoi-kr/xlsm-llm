@@ -215,3 +215,56 @@ Function LLM_CODE(programDetails As String, programmingLanguage As String, _
     LLM_CODE = ProcessLLMResponse(response, showThink)
 End Function
 
+Function LLM_LIST(prompt As String, Optional model As Variant, Optional base_url As Variant, Optional showThink As Boolean = False) As Variant
+    Dim listPrompt As String
+    ' 영어 프롬프트에 출력 형식 예시를 포함하여, 모델이 <list>와 <item> 태그를 사용해 출력하도록 명시합니다.
+    listPrompt = prompt & vbCrLf & _
+                 "Example:" & vbCrLf & _
+                 "<list><item>Apple</item><item>Banana</item><item>Cherry</item></list>" & vbCrLf & _
+                 "Please output only the list items enclosed within <list> and <item> tags, exactly in the above format, with no additional commentary."
+    
+    Dim response As String
+    response = LLM_Base(listPrompt, "", , , model, base_url)
+    
+    Dim processedResponse As Variant
+    processedResponse = ProcessLLMResponse(response, showThink)
+    
+    Dim contentText As String, thinkText As String
+    If showThink Then
+        thinkText = processedResponse(0)
+        contentText = processedResponse(1)
+    Else
+        contentText = processedResponse
+    End If
+    
+    ' <item> 태그 사이의 리스트 항목들을 추출
+    Dim items() As String
+    Dim itemCount As Long
+    itemCount = 0
+    Dim searchPos As Long, startPos As Long, endPos As Long, currentItem As String
+    searchPos = 1
+    Do
+        startPos = InStr(searchPos, contentText, "<item>")
+        If startPos = 0 Then Exit Do
+        endPos = InStr(startPos, contentText, "</item>")
+        If endPos = 0 Then Exit Do
+        currentItem = Mid(contentText, startPos + Len("<item>"), endPos - startPos - Len("<item>"))
+        currentItem = Trim(currentItem)
+        ReDim Preserve items(itemCount)
+        items(itemCount) = currentItem
+        itemCount = itemCount + 1
+        searchPos = endPos + Len("</item>")
+    Loop
+    
+    ' showThink 옵션에 따라 결과 배열 반환:
+    ' - showThink가 False이면, 순수 리스트 배열만 반환
+    ' - showThink가 True이면, 첫 번째 요소는 think 내용, 두 번째 요소는 리스트 배열 반환
+    If showThink Then
+        Dim resultArray(1) As Variant
+        resultArray(0) = thinkText
+        resultArray(1) = items
+        LLM_LIST = resultArray
+    Else
+        LLM_LIST = items
+    End If
+End Function
