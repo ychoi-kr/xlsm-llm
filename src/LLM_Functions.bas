@@ -268,3 +268,23 @@ Function LLM_LIST(prompt As String, Optional model As Variant, Optional base_url
         LLM_LIST = items
     End If
 End Function
+
+Function LLM_EDIT(text As String, Optional prompt As String, Optional temperature As Variant, _
+                  Optional max_tokens As Variant, Optional model As Variant, Optional base_url As Variant, _
+                  Optional showThink As Boolean = False) As Variant
+    ' 기본 프롬프트 설정: 사용자가 prompt를 입력하지 않은 경우
+    If prompt = "" Then
+        prompt = "Please correct the following sentence for clarity, grammar, and punctuation:"
+    End If
+    
+    ' 입력 문장과 프롬프트를 결합하여 전체 요청 문장을 구성합니다.
+    Dim fullPrompt As String
+    fullPrompt = prompt & " " & text
+    
+    ' LLM에게 요청 전송
+    Dim response As String
+    response = LLM_Base(fullPrompt, "", temperature, max_tokens, model, base_url)
+    
+    ' 응답을 파싱하여 최종 결과를 반환합니다.
+    LLM_EDIT = ProcessLLMResponse(response, showThink)
+End Function

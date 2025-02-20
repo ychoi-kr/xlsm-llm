@@ -2,12 +2,15 @@
 
 Excel VBA functions utilizing local LLMs.
 
-This repository provides a set of Excel VBA modules that integrate with local language model (LLM) servers. It allows you to send prompts and receive processed text (e.g., summaries) directly into Excel, complete with error handling and proper formatting.
+This repository provides a set of Excel VBA modules that integrate with local language model (LLM) servers. It allows you to send prompts and receive processed text (e.g., summaries, code generation, text correction) directly into Excel, complete with error handling and proper formatting.
 
 ## Features
 
 - **LLM**: Send a prompt to the LLM server and receive a response.
 - **LLM_SUMMARIZE**: Summarize a given text using the LLM.
+- **LLM_CODE**: Generate code based on provided requirements.
+- **LLM_LIST**: Create a list with formatted output.
+- **LLM_EDIT**: Correct and improve a given sentence for clarity, grammar, and punctuation.
 - Modularized helper functions:
   - **BuildJsonPayload**: Constructs the JSON payload for the API request.
   - **SendLLMRequest**: Sends HTTP requests with detailed error reporting.
@@ -30,8 +33,14 @@ This repository provides a set of Excel VBA modules that integrate with local la
     ![](img/usage_LLM_SUMMARIZE.png)
 - Use `=LLM_CODE(program_detail, programming_language, [model], [base_url], [show_think])` to write code.
     ![](img/usage_LLM_CODE.png)
-- Use `=LLM_LIST(prompt, [model], [base_url], [show_think]) to create a list.
+- Use `=LLM_LIST(prompt, [model], [base_url], [show_think])` to create a list.
     ![](img/usage_LLM_LIST.png)
+- Use `=LLM_EDIT(text, [prompt], [temperature], [max_tokens], [model], [base_url], [show_think])` to correct and edit sentences.  
+  By default, the function uses the prompt:  
+  `Please correct the following sentence for clarity, grammar, and punctuation:`  
+  You can override this by providing a custom prompt if desired.  
+    ![](img/usage_LLM_EDIT.png)
+
 - Ensure your server URL is correctly configured, or pass it as the optional `base_url` parameter.
 
 ## License
