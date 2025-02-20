@@ -21,11 +21,20 @@ This repository provides a set of Excel VBA modules that integrate with local la
 
 ## Installation
 
-1. Clone the repository:
+1. **Clone the repository:**
    ```sh
    git clone https://github.com/ychoi-kr/xlsm-llm.git
    ```
-2. Import the VBA modules from the `src` directory (e.g., `LLM_Functions.bas`) into your Excel workbook.
+2. **Import the VBA modules into your Excel workbook:**
+   - Open your Excel workbook.
+   - Press `Alt + F11` to open the Visual Basic for Applications (VBA) editor.
+   - In the VBA editor, press `Ctrl + R` if the Project Explorer is not already visible. Locate your workbook's project (e.g., `VBAProject (YourWorkbookName.xlsm)`).
+   - Right-click on your workbook's project in the Project Explorer and select **Import File…**.
+   - Navigate to the `src` folder in the cloned repository, select the module file (for example, `LLM_Functions.bas`), and click **Open**.
+   - The module should now appear in your Project Explorer.
+3. **Add the required Microsoft XML reference:**
+   - In the VBA editor, go to **Tools > References**.
+   - Check **Microsoft XML, v6.0** from the list and click **OK**.
 
 ## Usage
 
