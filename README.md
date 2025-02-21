@@ -8,19 +8,23 @@ These functions allow you to send prompts to LLMs and retrieve AI-generated resp
 xlsm-llm provides powerful Excel VBA functions that seamlessly integrate with local and external LLMs, enabling text processing, translation, summarization, and code generation directly within Excel.
 
 **✨ Interact with LLMs directly in Excel**
+
 - **LLM:** Send a prompt and receive AI-generated responses in your spreadsheet.
 - **LLM_SUMMARIZE:** Automatically generate concise summaries of long texts.
 - **LLM_CODE:** Generate code snippets in any programming language based on your requirements.
 - **LLM_LIST:** Extract structured lists from AI responses for better data organization.
 - **LLM_EDIT:** Improve text by fixing grammar, punctuation, and clarity.
 - **LLM_TRANSLATE:** Translate text into different languages, with custom translation prompts available.
+- **LLM_REVIEW_TRANSLATION:** Evaluate and refine translations by comparing them to the original text.
 
 **⚡ Optimized for Ease of Use**
+
 - Works with both **local LLMs and cloud APIs** (e.g., OpenAI, Gemini, Upstage).
 - API keys can be provided **manually** or set as **environment variables** for seamless authentication.
 - Functions handle **newline formatting** automatically, ensuring clean Excel outputs.
 
 **✅ Reliable and Flexible**
+
 - Supports **custom prompts** for greater control over AI-generated outputs.
 - Includes **error handling** for stable and predictable function execution.
 - Compatible with **various LLM models**, including GPT-based models, Upstage Solar, and locally hosted models.
