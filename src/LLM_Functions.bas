@@ -374,3 +374,32 @@ Function LLM_TRANSLATE(text As String, Optional targetLang As String = "", Optio
     response = LLM_Base(finalPrompt, temperature, maxTokens, model, baseUrl, apiKey)
     LLM_TRANSLATE = ProcessLLMResponse(response, showThink)
 End Function
+
+Function LLM_REVIEW_TRANSLATION(originalText As String, translatedText As String, _
+                                Optional focus As String = "", _
+                                Optional temperature As Variant, Optional maxTokens As Variant, _
+                                Optional model As Variant, Optional baseUrl As Variant, _
+                                Optional showThink As Boolean = False, Optional apiKey As Variant) As Variant
+    Dim fullPrompt As String
+    
+    ' 기본 프롬프트: 주안점이 없는 경우 균형 잡힌 감수 요청
+    If focus = "" Then
+        fullPrompt = "Review the following translation for accuracy, grammar, fluency, and overall quality. " & _
+                     "Provide feedback and suggest improvements if necessary." & vbCrLf & _
+                     "Original text: " & originalText & vbCrLf & _
+                     "Translated text: " & translatedText
+    Else
+        ' 주안점이 있는 경우, 사용자가 지정한 초점에 맞춘 프롬프트
+        fullPrompt = "Review the following translation with a focus on " & focus & ". " & _
+                     "Provide feedback and suggest improvements if necessary." & vbCrLf & _
+                     "Original text: " & originalText & vbCrLf & _
+                     "Translated text: " & translatedText
+    End If
+    
+    ' LLM 요청 전송
+    Dim response As String
+    response = LLM_Base(fullPrompt, temperature, maxTokens, model, baseUrl, apiKey)
+    
+    ' 응답 처리 및 반환
+    LLM_REVIEW_TRANSLATION = ProcessLLMResponse(response, showThink)
+End Function
