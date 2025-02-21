@@ -140,36 +140,46 @@ However, you can supply a custom prompt to tailor the editing process to your ne
 ```
 ![](img/usage_LLM_EDIT.png)
 
-### LLM_TRANSLATE
-LLM_TRANSLATE translates text from one language to another using your LLM. The simplest usage requires only the text and the target language. You can also provide a custom translation instruction if desired.
+### **LLM_TRANSLATE**  
 
-- **General Usage:**  
-  In the simplest case, you specify the text to be translated and the target language. Optionally, you can include the source language and/or a custom prompt. When a custom prompt is provided, both the `targetLang` and `sourceLang` parameters are ignored.
-  
-  **Format:**
-  ```
-  =LLM_TRANSLATE(text, targetLang, [sourceLang], [customPrompt], [temperature], [maxTokens], [model], [base_url], [show_think], [api_key])
-  ```
-  
-  For example, to translate "Hello, world!" into Spanish:
-  ```
-  =LLM_TRANSLATE("Hello, world!", "es")
-  ```
-  
-  And to use a custom translation instruction (which ignores `targetLang` and `sourceLang`):
-  ```
-  =LLM_TRANSLATE(text, [targetLang ignored], [sourceLang ignored], customPrompt, [temperature], [maxTokens], [model], [base_url], [show_think], [api_key])
-  ```
+Translates text into a specified language. You can provide a **custom translation prompt** for more control over the output.  
 
-- **Upstage API Exception:**  
-  When using Upstage API's `translation-enko` or `translation-koen` models, the function ignores the `targetLang`, `sourceLang`, and `customPrompt` parameters, using only the input text for translation.
-  
-  **Format:**
-  ```
-  =LLM_TRANSLATE(text, [targetLang ignored], [sourceLang ignored], [customPrompt ignored], [temperature], [maxTokens], [model], [base_url], [show_think], [api_key])
-  ```
-  
-![](img/usage_LLM_TRANSLATE.png)
+**Example:**  
+```
+=LLM_TRANSLATE(A1, "es")
+```
+➡ Translates the text in **A1** into Spanish.  
+
+If a **custom prompt** is provided, `targetLang` and `sourceLang` are ignored:  
+```
+=LLM_TRANSLATE(A1, , , "Translate this text using formal language.")
+```
+
+For **local LLMs**, specify `base_url` and `model`:  
+```
+=LLM_TRANSLATE(A1, "ja", , , , , "qwen2.5-14b-instruct", "http://localhost:1234/v1/")
+```
+
+📖 **For detailed usage, visit:**  
+🔗 [LLM_TRANSLATE Wiki Page](https://wikidocs.net/276821)
+
+### **LLM_REVIEW_TRANSLATION**  
+
+Evaluates a translation by comparing it to the original text, providing feedback on **accuracy, grammar, fluency, and overall quality**. You can specify a **focus area** (e.g., "fluency", "technical terminology") for targeted review.  
+
+**Example:**  
+```
+=LLM_REVIEW_TRANSLATION(A1, B1, "fluency")
+```
+➡ Reviews the translation in **B1** with a focus on fluency, comparing it to the original text in **A1**.  
+
+Works with **both local and cloud-based LLMs**. For local models, specify `base_url` and `model`:  
+```
+=LLM_REVIEW_TRANSLATION(A1, B1, , , , "qwen2.5-14b-instruct", "http://localhost:1234/v1/")
+```
+
+📖 **For detailed usage, visit:**  
+🔗 [LLM_REVIEW_TRANSLATION Wiki Page](https://wikidocs.net/276819)
 
 ## License
 
