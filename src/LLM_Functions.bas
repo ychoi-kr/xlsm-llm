@@ -1,7 +1,7 @@
 Option Explicit
 
-Const BASE_URL_DEFAULT As String = "http://localhost:1234/v1"
-Const DEFAULT_MODEL As String = "exaone-3.5-7.8b-instruct"
+Const BASE_URL_DEFAULT As String = "https://api.openai.com/v1/"
+Const DEFAULT_MODEL As String = "gpt-4o-mini"
 
 ' 공통 인증 로직: API 키가 전달되면 HTTP 요청 헤더에 추가
 Private Sub SetAuthorizationHeader(ByRef http As Object, Optional apiKey As Variant)
@@ -135,11 +135,43 @@ Function LLM_Base(prompt As String, Optional temperature As Variant, Optional ma
         modelName = CStr(model)
     End If
     
+    ' API 키 처리: 각 서비스별로 필수 키 확인
+    Dim finalApiKey As String
+    Dim lowerUrl As String
+    lowerUrl = LCase(url)
+    
+    If IsMissing(apiKey) Or IsEmpty(apiKey) Then
+        If InStr(lowerUrl, "gemini") > 0 Or InStr(LCase(modelName), "gemini") > 0 Then
+            finalApiKey = Environ("GEMINI_API_KEY")
+            If finalApiKey = "" Then
+                LLM_Base = "Error: Gemini API requires an API key. Provide it as the last argument or set the GEMINI_API_KEY environment variable."
+                Exit Function
+            End If
+        ElseIf InStr(lowerUrl, "openai.com") > 0 Then
+            finalApiKey = Environ("OPENAI_API_KEY")
+            If finalApiKey = "" Then
+                LLM_Base = "Error: OpenAI API requires an API key. Provide it as the last argument or set the OPENAI_API_KEY environment variable."
+                Exit Function
+            End If
+        ElseIf InStr(lowerUrl, "upstage.ai") > 0 Or InStr(LCase(modelName), "upstage") > 0 Then
+            finalApiKey = Environ("UPSTAGE_API_KEY")
+            If finalApiKey = "" Then
+                LLM_Base = "Error: Upstage API requires an API key. Provide it as the last argument or set the UPSTAGE_API_KEY environment variable."
+                Exit Function
+            End If
+        Else
+            ' 기본적으로 로컬 서버로 가정, 키 없이 진행
+            finalApiKey = ""
+        End If
+    Else
+        finalApiKey = CStr(apiKey)
+    End If
+    
     Dim jsonPayload As String
     jsonPayload = BuildJsonPayload(modelName, EscapeText(prompt), temperature, maxTokens)
     
     Dim response As String
-    response = SendLLMRequest(url, jsonPayload, apiKey)
+    response = SendLLMRequest(url, jsonPayload, finalApiKey)
     
     If Left(response, 6) = "Error:" Then
         LLM_Base = response
@@ -300,51 +332,41 @@ Function LLM_EDIT(text As String, Optional prompt As String, Optional temperatur
     LLM_EDIT = ProcessLLMResponse(response, showThink)
 End Function
 
-Function LLM_TRANSLATE(text As String, targetLang As String, Optional sourceLang As String = "", _
+Function LLM_TRANSLATE(text As String, Optional targetLang As String = "", Optional sourceLang As String = "", _
                        Optional customPrompt As String = "", Optional temperature As Variant, _
                        Optional maxTokens As Variant, Optional model As Variant, Optional baseUrl As Variant, _
                        Optional showThink As Boolean = False, Optional apiKey As Variant) As Variant
     Dim finalPrompt As String
+    Dim effectiveBaseUrl As String
+    Dim effectiveModel As String
     
-    ' 만약 baseUrl이 Upstage API이고, 모델이 translation-enko 또는 translation-koen인 경우, 프롬프트를 무시하고 text만 사용합니다.
-    If baseUrl <> "" And LCase(baseUrl) = "https://api.upstage.ai/v1/solar" Then
-        If Not IsMissing(model) Then
-            If LCase(model) = "translation-enko" Or LCase(model) = "translation-koen" Then
-                finalPrompt = text
-            Else
-                ' 다른 모델인 경우 일반 프롬프트 생성
-                If customPrompt <> "" Then
-                    finalPrompt = customPrompt
-                Else
-                    If sourceLang <> "" Then
-                        finalPrompt = "Translate the following text from " & sourceLang & " to " & targetLang & ": " & text
-                    Else
-                        finalPrompt = "Translate the following text to " & targetLang & ": " & text
-                    End If
-                End If
-            End If
-        Else
-            ' model이 제공되지 않은 경우 기본 프롬프트 생성
-            If customPrompt <> "" Then
-                finalPrompt = customPrompt
-            Else
-                If sourceLang <> "" Then
-                    finalPrompt = "Translate the following text from " & sourceLang & " to " & targetLang & ": " & text
-                Else
-                    finalPrompt = "Translate the following text to " & targetLang & ": " & text
-                End If
-            End If
-        End If
+    ' baseUrl과 model은 생략 시 LLM_Base에서 기본값 처리
+    If Not IsMissing(baseUrl) And Not IsEmpty(baseUrl) Then effectiveBaseUrl = CStr(baseUrl)
+    If Not IsMissing(model) And Not IsEmpty(model) Then effectiveModel = CStr(model)
+    
+    ' 실제 사용될 baseUrl과 model 결정
+    Dim resolvedBaseUrl As String
+    Dim resolvedModel As String
+    resolvedBaseUrl = IIf(effectiveBaseUrl = "", BASE_URL_DEFAULT, effectiveBaseUrl)
+    resolvedModel = IIf(effectiveModel = "", DEFAULT_MODEL, effectiveModel)
+    
+    ' Upstage 번역 모델 체크
+    If LCase(resolvedBaseUrl) = "https://api.upstage.ai/v1/solar" And _
+       (LCase(resolvedModel) = "translation-enko" Or LCase(resolvedModel) = "translation-koen") Then
+        finalPrompt = text ' 프롬프트 없이 text만 사용
     Else
-        ' Upstage API가 아닌 경우 일반 프롬프트 생성
+        ' 다른 모델의 경우 targetLang 또는 customPrompt 중 하나가 필요
+        If targetLang = "" And customPrompt = "" Then
+            LLM_TRANSLATE = "Error: Either targetLang or customPrompt must be provided for non-Upstage translation models"
+            Exit Function
+        End If
+        
+        ' 프롬프트 생성: customPrompt가 있으면 text와 조합, 없으면 기본 프롬프트
         If customPrompt <> "" Then
-            finalPrompt = customPrompt
+            finalPrompt = customPrompt & " " & text
         Else
-            If sourceLang <> "" Then
-                finalPrompt = "Translate the following text from " & sourceLang & " to " & targetLang & ": " & text
-            Else
-                finalPrompt = "Translate the following text to " & targetLang & ": " & text
-            End If
+            finalPrompt = IIf(sourceLang <> "", "Translate the following text from " & sourceLang & " to " & targetLang & ": ", _
+                              "Translate the following text to " & targetLang & ": ") & text
         End If
     End If
 
