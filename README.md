@@ -1,23 +1,31 @@
 # xlsm-llm
 
-Excel VBA functions utilizing local LLMs.
+Excel VBA functions for interacting with local and cloud-based LLMs, enabling text processing, translation, summarization, and code generation directly in Excel.  
+These functions allow you to send prompts to LLMs and retrieve AI-generated responses directly in your spreadsheet, supporting both local models and external APIs like OpenAI, Gemini, and Upstage.
 
-This repository provides a set of Excel VBA modules that integrate with local language model (LLM) servers. It allows you to send prompts and receive processed text (e.g., summaries, code generation, text correction) directly into Excel, complete with error handling and proper formatting.
+## Features  
 
-## Features
+xlsm-llm provides powerful Excel VBA functions that seamlessly integrate with local and external LLMs, enabling text processing, translation, summarization, and code generation directly within Excel.
 
-- **LLM**: Sends a prompt to the LLM server and returns a processed response.
-- **LLM_SUMMARIZE**: Generates a concise summary of a given text using the LLM.
-- **LLM_CODE**: Produces code based on provided requirements and the specified programming language.
-- **LLM_LIST**: Creates a formatted list of items using specific output tags.
-- **LLM_EDIT**: Improves a sentence by correcting grammar, punctuation, and clarity.
-- **LLM_TRANSLATE**: Translates text from one language to another, with flexible usage based on the translation model.
-- Modularized helper functions:
-  - **BuildJsonPayload**: Constructs the JSON payload for the API request.
-  - **SendLLMRequest**: Sends HTTP requests with detailed error reporting.
-  - **ExtractContent**: Uses regex to extract the response content without trailing noise.
-- Automatic newline conversion for proper cell formatting.
-- **API Key Support**: Each function accepts an optional API key (as the last parameter) that allows you to authenticate with external LLM APIs (such as OpenAI, Gemini, Upstage, etc.). You can also store your API key in an environment variable (e.g., `OPENAI_API_KEY`, `GEMINI_API_KEY`, or `UPSTAGE_API_KEY`) so that it is used automatically when the API key parameter is omitted.
+**✨ Interact with LLMs directly in Excel**
+- **LLM:** Send a prompt and receive AI-generated responses in your spreadsheet.
+- **LLM_SUMMARIZE:** Automatically generate concise summaries of long texts.
+- **LLM_CODE:** Generate code snippets in any programming language based on your requirements.
+- **LLM_LIST:** Extract structured lists from AI responses for better data organization.
+- **LLM_EDIT:** Improve text by fixing grammar, punctuation, and clarity.
+- **LLM_TRANSLATE:** Translate text into different languages, with custom translation prompts available.
+
+**⚡ Optimized for Ease of Use**
+- Works with both **local LLMs and cloud APIs** (e.g., OpenAI, Gemini, Upstage).
+- API keys can be provided **manually** or set as **environment variables** for seamless authentication.
+- Functions handle **newline formatting** automatically, ensuring clean Excel outputs.
+
+**✅ Reliable and Flexible**
+- Supports **custom prompts** for greater control over AI-generated outputs.
+- Includes **error handling** for stable and predictable function execution.
+- Compatible with **various LLM models**, including GPT-based models, Upstage Solar, and locally hosted models.
+
+With xlsm-llm, you can harness AI capabilities without leaving Excel, enhancing productivity and automation in text processing and coding tasks.
 
 ## Installation
 
@@ -72,6 +80,8 @@ This function sends a prompt to your local LLM server and returns the processed 
 If you omit the `api_key` argument, the function will automatically use the API key stored in the relevant environment variable (e.g., `OPENAI_API_KEY` for OpenAI API).
 
 ![](img/usage_LLM.png)
+
+> **Note:** If the response includes line breaks, you may need to enable text wrapping in the cell. To do this, right-click the cell, select **Format Cells**, go to the **Alignment** tab, and check **Wrap Text**.
 
 ### LLM_SUMMARIZE
 LLM_SUMMARIZE processes the input text to produce a succinct summary. It is ideal for quickly condensing lengthy texts.
