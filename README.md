@@ -44,7 +44,7 @@ With xlsm-llm, you can harness AI capabilities without leaving Excel, enhancing 
    - In the VBA editor, go to **Tools > References**.
    - Check **Microsoft XML, v6.0** from the list and click **OK**.
 
-### Setting Environment Variables
+## Setting Environment Variables
 
 Before using the functions, ensure that you have obtained an API key from your desired service provider (e.g., OpenAI, Gemini, Upstage, etc.). These keys allow you to authenticate with external LLM APIs. You can store these keys as environment variables so that the functions automatically use them when the API key parameter is omitted.
 
@@ -66,7 +66,26 @@ For example, if you are using the OpenAI API, set the environment variable `OPEN
 
 This method works for any API key required by the functions; just replace `OPENAI_API_KEY` with the appropriate variable name for the service you are using (e.g., `GEMINI_API_KEY`, `UPSTAGE_API_KEY`).
 
-**Note:** If you are only using a local LLM, API keys are generally not necessary, so you can skip this step.
+## Using a Local LLM
+
+You can use `xlsm-llm` with a **local LLM** instead of a cloud-based API (e.g., OpenAI, Gemini, Upstage). To do this, you need to **set up and run a local LLM server**.  
+
+The easiest way to run a local LLM is with **[LM Studio](https://lmstudio.ai/)**:  
+
+1. **Download and install LM Studio** from [lmstudio.ai](https://lmstudio.ai/).  
+2. **Download a model** – LM Studio suggests recommended models upon first launch, or you can browse and install a model of your choice.  
+3. **Start the local server** in the **Local Server** tab.  
+4. **Set the `base_url` in Excel functions** to match the server’s address (e.g., `http://localhost:1234/v1/`).  
+5. **Specify the model explicitly** when calling the function, as local LLMs require a model name.  
+
+For example:  
+```
+=LLM("Write a haiku", "recursion in programming", 0.7, 100, "qwen2.5-14b-instruct", "http://localhost:1234/v1/")
+```
+
+💡 **No API key is required** for most local LLMs.  
+
+For detailed setup instructions, refer to the [LM Studio documentation](https://lmstudio.ai/docs).
 
 ## Usage
 
