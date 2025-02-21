@@ -6,18 +6,18 @@ This repository provides a set of Excel VBA modules that integrate with local la
 
 ## Features
 
-- **LLM**: Send a prompt to the LLM server and receive a response.
-- **LLM_SUMMARIZE**: Summarize a given text using the LLM.
-- **LLM_CODE**: Generate code based on provided requirements.
-- **LLM_LIST**: Create a list with formatted output.
-- **LLM_EDIT**: Correct and improve a given sentence for clarity, grammar, and punctuation.
-- **LLM_TRANSLATE**: Translate text from a source language to a target language.
+- **LLM**: Sends a prompt to the LLM server and returns a processed response.
+- **LLM_SUMMARIZE**: Generates a concise summary of a given text using the LLM.
+- **LLM_CODE**: Produces code based on provided requirements and the specified programming language.
+- **LLM_LIST**: Creates a formatted list of items using specific output tags.
+- **LLM_EDIT**: Improves a sentence by correcting grammar, punctuation, and clarity.
+- **LLM_TRANSLATE**: Translates text from one language to another, with flexible usage based on the translation model.
 - Modularized helper functions:
   - **BuildJsonPayload**: Constructs the JSON payload for the API request.
   - **SendLLMRequest**: Sends HTTP requests with detailed error reporting.
   - **ExtractContent**: Uses regex to extract the response content without trailing noise.
 - Automatic newline conversion for proper cell formatting.
-- **API Key Support**: Each function accepts an optional API key (as the last parameter) that lets you authenticate with external LLM APIs (such as OpenAI, Gemini, Upstage, etc.) by including the appropriate token.
+- **API Key Support**: Each function accepts an optional API key (as the last parameter) that allows you to authenticate with external LLM APIs (such as OpenAI, Gemini, Upstage, etc.) by including the appropriate token.
 
 ## Installation
 
@@ -38,22 +38,77 @@ This repository provides a set of Excel VBA modules that integrate with local la
 
 ## Usage
 
-- Use `=LLM(prompt, [value], [temperature], [max_tokens], [model], [base_url], [show_think], [api_key])` to get responses from your local LLM server.
-    ![](img/usage_LLM.png)
-- Use `=LLM_SUMMARIZE(text, [prompt], [temperature], [max_tokens], [model], [base_url], [show_think], [api_key])` to generate summaries.
-    ![](img/usage_LLM_SUMMARIZE.png)
-- Use `=LLM_CODE(program_detail, programming_language, [model], [base_url], [show_think], [api_key])` to write code.
-    ![](img/usage_LLM_CODE.png)
-- Use `=LLM_LIST(prompt, [model], [base_url], [show_think], [api_key])` to create a list.
-    ![](img/usage_LLM_LIST.png)
-- Use `=LLM_EDIT(text, [prompt], [temperature], [max_tokens], [model], [base_url], [show_think], [api_key])` to correct and edit sentences.  
-  By default, the function uses the prompt:  
-  `Please correct the following sentence for clarity, grammar, and punctuation:`  
-  You can override this by providing a custom prompt if desired.  
-    ![](img/usage_LLM_EDIT.png)
-- Use `=LLM_TRANSLATE(text, targetLang, [sourceLang], [customPrompt], [temperature], [maxTokens], [model], [base_url], [show_think], [apiKey])` to translate text. Note that for Upstage API's translation-enko or translation-koen models, the custom prompt parameter is ignored.
-    ![](img/usage_LLM_TRANSLATE.png)
-- Ensure your server URL is correctly configured, or pass it as the optional `base_url` parameter.
+### LLM
+This function sends a prompt to your local LLM server and returns the processed response.  
+**Example format:**
+```
+=LLM(prompt, [value], [temperature], [max_tokens], [model], [base_url], [show_think], [api_key])
+```
+![](img/usage_LLM.png)
+
+### LLM_SUMMARIZE
+LLM_SUMMARIZE processes the input text to produce a succinct summary. It is ideal for quickly condensing lengthy texts.  
+**Example format:**
+```
+=LLM_SUMMARIZE(text, [prompt], [temperature], [max_tokens], [model], [base_url], [show_think], [api_key])
+```
+![](img/usage_LLM_SUMMARIZE.png)
+
+### LLM_CODE
+LLM_CODE generates code based on the provided program details and programming language. This function is perfect for automating code snippet creation.  
+**Example format:**
+```
+=LLM_CODE(program_detail, programming_language, [model], [base_url], [show_think], [api_key])
+```
+![](img/usage_LLM_CODE.png)
+
+### LLM_LIST
+LLM_LIST creates a list of items using a specified prompt. The output is formatted using special tags, ensuring consistency in the list's presentation.  
+**Example format:**
+```
+=LLM_LIST(prompt, [model], [base_url], [show_think], [api_key])
+```
+![](img/usage_LLM_LIST.png)
+
+### LLM_EDIT
+LLM_EDIT refines a sentence by correcting grammar, punctuation, and overall clarity. By default, it uses the prompt:  
+`Please correct the following sentence for clarity, grammar, and punctuation:`  
+However, you can supply a custom prompt to tailor the editing process to your needs.  
+**Example format:**
+```
+=LLM_EDIT(text, [prompt], [temperature], [max_tokens], [model], [base_url], [show_think], [api_key])
+```
+![](img/usage_LLM_EDIT.png)
+
+### LLM_TRANSLATE  
+LLM_TRANSLATE translates text from one language to another using your LLM. The easiest usage requires only the text to be translated and the target language. For example:
+
+```
+=LLM_TRANSLATE(text, targetLang, [sourceLang], [customPrompt], [temperature], [maxTokens], [model], [base_url], [show_think], [api_key])
+```
+
+In the simplest case, you can simply use:
+
+```
+=LLM_TRANSLATE("Hello, world!", "es")
+```
+
+to translate "Hello, world!" into Spanish.
+
+If you prefer to specify a custom translation instruction, you can provide a custom prompt. When a custom prompt is supplied, both the `targetLang` and `sourceLang` parameters are ignored:
+
+```
+=LLM_TRANSLATE(text, [targetLang ignored], [sourceLang ignored], customPrompt, [temperature], [maxTokens], [model], [base_url], [show_think], [api_key])
+```
+
+**Upstage API Exception:**  
+When using Upstage API's `translation-enko` or `translation-koen` models, the function ignores the `targetLang`, `sourceLang`, and `customPrompt` parameters altogether, using only the input text for translation:
+
+```
+=LLM_TRANSLATE(text, [targetLang ignored], [sourceLang ignored], [customPrompt ignored], [temperature], [maxTokens], [model], [base_url], [show_think], [api_key])
+```
+
+![](img/usage_LLM_TRANSLATE.png)
 
 ## License
 
