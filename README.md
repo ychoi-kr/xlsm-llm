@@ -89,56 +89,115 @@ For detailed setup instructions, refer to the [LM Studio documentation](https://
 
 ## Usage
 
-### LLM
-This function sends a prompt to your local LLM server and returns the processed response. You can either let the function use the API key stored in your environment variable or provide one directly as the last parameter.
+### **LLM**  
 
-**Example format:**
+Sends a prompt to an **LLM (Large Language Model)** and returns the AI-generated response. Useful for **text generation, explanations, brainstorming, and creative writing**.  
+
+**Example:**  
 ```
-=LLM(prompt, [value], [temperature], [max_tokens], [model], [base_url], [show_think], [api_key])
+=LLM("Write a short story about AI.")
 ```
-If you omit the `api_key` argument, the function will automatically use the API key stored in the relevant environment variable (e.g., `OPENAI_API_KEY` for OpenAI API).
+➡ Generates a **short AI-written story**.  
 
-![](img/usage_LLM.png)
-
-> **Note:** If the response includes line breaks, you may need to enable text wrapping in the cell. To do this, right-click the cell, select **Format Cells**, go to the **Alignment** tab, and check **Wrap Text**.
-
-### LLM_SUMMARIZE
-LLM_SUMMARIZE processes the input text to produce a succinct summary. It is ideal for quickly condensing lengthy texts.
-
-**Example format:**
+To add **extra context**, use the `value` parameter:  
 ```
-=LLM_SUMMARIZE(text, [prompt], [temperature], [max_tokens], [model], [base_url], [show_think], [api_key])
+=LLM("Explain recursion", "using simple examples.")
 ```
-![](img/usage_LLM_SUMMARIZE.png)
 
-### LLM_CODE
-LLM_CODE generates code based on the provided program details and programming language. This function is perfect for automating code snippet creation.
+For **local LLMs**, specify `base_url` and `model`:  
+```
+=LLM("Describe quantum computing", , , , "qwen2.5-14b-instruct", "http://localhost:1234/v1/")
+```
 
-**Example format:**
-```
-=LLM_CODE(program_detail, programming_language, [model], [base_url], [show_think], [api_key])
-```
-![](img/usage_LLM_CODE.png)
+📖 **For detailed usage, visit:**  
+🔗 [LLM Wiki Page](https://wikidocs.net/276834)
 
-### LLM_LIST
-LLM_LIST creates a list of items using a specified prompt. The output is formatted using special tags, ensuring consistency in the list's presentation.
+### **LLM_SUMMARIZE**  
 
-**Example format:**
-```
-=LLM_LIST(prompt, [model], [base_url], [show_think], [api_key])
-```
-![](img/usage_LLM_LIST.png)
+Condenses a given text into a **shorter, more concise version**. By default, it produces a **one-line summary**, but you can customize the format.  
 
-### LLM_EDIT
-LLM_EDIT refines a sentence by correcting grammar, punctuation, and overall clarity. By default, it uses the prompt:  
-`Please correct the following sentence for clarity, grammar, and punctuation:`  
-However, you can supply a custom prompt to tailor the editing process to your needs.
+**Example:**  
+```
+=LLM_SUMMARIZE(A1)
+```
+➡ Summarizes the text in **A1** into a single sentence.  
 
-**Example format:**
+To change the summary style, use a **custom prompt**:  
 ```
-=LLM_EDIT(text, [prompt], [temperature], [max_tokens], [model], [base_url], [show_think], [api_key])
+=LLM_SUMMARIZE(A1, "Summarize in bullet points:")
 ```
-![](img/usage_LLM_EDIT.png)
+
+For **local LLMs**, specify `base_url` and `model`:  
+```
+=LLM_SUMMARIZE(A1, "Summarize in simple terms.", , , "qwen2.5-14b-instruct", "http://localhost:1234/v1/")
+```
+
+📖 **For detailed usage, visit:**  
+🔗 [LLM_SUMMARIZE Wiki Page](https://wikidocs.net/276830)
+
+### **LLM_CODE**  
+
+Generates code snippets based on a given description and programming language. This function allows you to quickly create code directly within Excel.  
+
+**Example:**  
+```
+=LLM_CODE("Calculate the factorial of a number", "Python")
+```
+➡ Generates a **Python function** to calculate the factorial of a number.  
+
+To generate **JavaScript code**:  
+```
+=LLM_CODE("Create a basic countdown timer", "JavaScript")
+```
+
+For **local LLMs**, specify `base_url` and `model`:  
+```
+=LLM_CODE("Sort a list using quicksort", "Python", "qwen2.5-14b-instruct", "http://localhost:1234/v1/")
+```
+
+📖 **For detailed usage, visit:**  
+🔗 [LLM_CODE Wiki Page](https://wikidocs.net/276828)
+
+### **LLM_LIST**  
+
+Generates a structured list based on a given prompt. The output is formatted as an **array**, making it easy to process in Excel.  
+
+**Example:**  
+```
+=LLM_LIST("List three common fruits.")
+```
+➡ Returns: **{"Apple", "Banana", "Cherry"}**  
+
+To use a **local LLM**, specify `base_url` and `model`:  
+```
+=LLM_LIST("List five AI models", "qwen2.5-14b-instruct", "http://localhost:1234/v1/")
+```
+
+📖 **For detailed usage, visit:**  
+🔗 [LLM_LIST Wiki Page](https://wikidocs.net/276829)
+
+### **LLM_EDIT**  
+
+Refines a given text by improving **grammar, punctuation, clarity, and fluency**. You can provide a **custom prompt** to adjust the editing style.  
+
+**Example:**  
+```
+=LLM_EDIT(A1)
+```
+➡ Corrects grammar and improves readability of the text in **A1**.  
+
+If you need a **specific editing style**, use a custom prompt:  
+```
+=LLM_EDIT(A1, "Make this text more formal.")
+```
+
+For **local LLMs**, specify `base_url` and `model`:  
+```
+=LLM_EDIT(A1, "Rewrite in a professional tone.", , , "qwen2.5-14b-instruct", "http://localhost:1234/v1/")
+```
+
+📖 **For detailed usage, visit:**  
+🔗 [LLM_EDIT Wiki Page](https://wikidocs.net/276827)
 
 ### **LLM_TRANSLATE**  
 
