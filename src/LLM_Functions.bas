@@ -1,26 +1,57 @@
 Option Explicit
 
 Const BASE_URL_DEFAULT As String = "https://api.openai.com/v1/"
+Const ANTHROPIC_URL As String = "https://api.anthropic.com/v1/messages"
 Const DEFAULT_MODEL As String = "gpt-4o-mini"
+Const DEFAULT_ANTHROPIC_MODEL As String = "claude-3-5-sonnet-20240620"
 
 ' 공통 인증 로직: API 키가 전달되면 HTTP 요청 헤더에 추가
-Private Sub SetAuthorizationHeader(ByRef http As Object, Optional apiKey As Variant)
+Private Sub SetAuthorizationHeader(ByRef http As Object, Optional apiKey As Variant, Optional isAnthropicAPI As Boolean = False)
     If Not IsMissing(apiKey) And Not IsEmpty(apiKey) Then
         If CStr(apiKey) <> "" Then
-            http.setRequestHeader "Authorization", "Bearer " & CStr(apiKey)
+            If isAnthropicAPI Then
+                ' Anthropic API는 x-api-key 헤더 사용
+                http.setRequestHeader "x-api-key", CStr(apiKey)
+                http.setRequestHeader "anthropic-version", "2023-06-01"
+            Else
+                ' 다른 API는 Bearer 토큰 사용
+                http.setRequestHeader "Authorization", "Bearer " & CStr(apiKey)
+            End If
         End If
     End If
 End Sub
 
 Private Function BuildJsonPayload(ByVal modelName As String, ByVal fullPrompt As String, _
-                                    Optional ByVal temperature As Variant, Optional ByVal maxTokens As Variant) As String
+                                    Optional ByVal temperature As Variant, Optional ByVal maxTokens As Variant, _
+                                    Optional ByVal isAnthropicAPI As Boolean = False) As String
     Dim jsonPayload As String
-    jsonPayload = "{" & _
-                  """model"": """ & modelName & """," & _
-                  """messages"": [{" & _
-                  """role"": ""user""," & _
-                  """content"": """ & Replace(fullPrompt, """", "\""") & """" & _
-                  "}]"
+    
+    If isAnthropicAPI Then
+        ' Anthropic API용 페이로드 구성
+        jsonPayload = "{" & _
+                      """model"": """ & modelName & """," & _
+                      """messages"": [{" & _
+                      """role"": ""user""," & _
+                      """content"": """ & Replace(fullPrompt, """", "\""") & """" & _
+                      "}]"
+        
+        ' Anthropic은 max_tokens가 필수
+        If IsMissing(maxTokens) Or IsEmpty(maxTokens) Then
+            jsonPayload = jsonPayload & ", ""max_tokens"": 4096"
+        ElseIf IsNumeric(maxTokens) Then
+            jsonPayload = jsonPayload & ", ""max_tokens"": " & maxTokens
+        Else
+            jsonPayload = jsonPayload & ", ""max_tokens"": 4096"
+        End If
+    Else
+        ' 기존 OpenAI 호환 페이로드 구성
+        jsonPayload = "{" & _
+                      """model"": """ & modelName & """," & _
+                      """messages"": [{" & _
+                      """role"": ""user""," & _
+                      """content"": """ & Replace(fullPrompt, """", "\""") & """" & _
+                      "}]"
+    End If
     
     ' 온도 (temperature) 추가
     If Not IsMissing(temperature) And Not IsEmpty(temperature) Then
@@ -29,10 +60,12 @@ Private Function BuildJsonPayload(ByVal modelName As String, ByVal fullPrompt As
         End If
     End If
     
-    ' 최대 토큰 (maxTokens) 추가
-    If Not IsMissing(maxTokens) And Not IsEmpty(maxTokens) Then
-        If IsNumeric(maxTokens) Then
-            jsonPayload = jsonPayload & ", ""max_tokens"": " & maxTokens
+    ' OpenAI의 경우에만 max_tokens 추가
+    If Not isAnthropicAPI Then
+        If Not IsMissing(maxTokens) And Not IsEmpty(maxTokens) Then
+            If IsNumeric(maxTokens) Then
+                jsonPayload = jsonPayload & ", ""max_tokens"": " & maxTokens
+            End If
         End If
     End If
     
@@ -40,15 +73,17 @@ Private Function BuildJsonPayload(ByVal modelName As String, ByVal fullPrompt As
     BuildJsonPayload = jsonPayload
 End Function
 
-Private Function SendLLMRequest(ByVal url As String, ByVal jsonPayload As String, Optional apiKey As Variant) As String
+Private Function SendLLMRequest(ByVal url As String, ByVal jsonPayload As String, _
+                               Optional apiKey As Variant, Optional isAnthropicAPI As Boolean = False) As String
     Dim http As Object
     Set http = CreateObject("MSXML2.XMLHTTP")
     
     On Error GoTo ErrorHandler
     http.Open "POST", url, False
     http.setRequestHeader "Content-Type", "application/json"
+    
     ' API 키가 제공되면 인증 헤더 추가
-    SetAuthorizationHeader http, apiKey
+    SetAuthorizationHeader http, apiKey, isAnthropicAPI
     http.send jsonPayload
 
     ' 응답 처리
@@ -79,12 +114,18 @@ ErrorHandler:
     Set http = Nothing
 End Function
 
-
-Private Function ExtractContent(ByVal response As String) As String
+Private Function ExtractContent(ByVal response As String, Optional isAnthropicAPI As Boolean = False) As String
     Dim regEx As Object
     Set regEx = CreateObject("VBScript.RegExp")
     
-    regEx.Pattern = """content"":\s*""([\s\S]*?)""\s*(?:,|\})"
+    If isAnthropicAPI Then
+        ' Anthropic 응답 포맷에 맞는 패턴 설정
+        regEx.Pattern = """content"":\s*\[\s*{\s*""type"":\s*""text"",\s*""text"":\s*""([\s\S]*?)""}\s*\]"
+    Else
+        ' 기존 OpenAI/기타 API 패턴
+        regEx.Pattern = """content"":\s*""([\s\S]*?)""\s*(?:,|\})"
+    End If
+    
     regEx.IgnoreCase = True
     regEx.Global = False
     
@@ -94,6 +135,17 @@ Private Function ExtractContent(ByVal response As String) As String
     If matches.count > 0 Then
         ExtractContent = Replace(matches(0).SubMatches(0), "\""", """")
     Else
+        ' 패턴 매칭 실패 시 대체 방법
+        ' Anthropic API 형식 변경 가능성에 대비
+        If isAnthropicAPI Then
+            ' 다른 Anthropic 응답 형식 시도
+            regEx.Pattern = """text"":\s*""([\s\S]*?)"""
+            Set matches = regEx.Execute(response)
+            If matches.count > 0 Then
+                ExtractContent = Replace(matches(0).SubMatches(0), "\""", """")
+                Exit Function
+            End If
+        End If
         ExtractContent = "Error: Failed to parse response"
     End If
 End Function
@@ -113,11 +165,31 @@ Private Function UnescapeText(ByVal text As String) As String
     UnescapeText = result
 End Function
 
-
 Function LLM_Base(prompt As String, Optional temperature As Variant, Optional maxTokens As Variant, _
                   Optional model As Variant, Optional baseUrl As Variant, Optional apiKey As Variant) As String
-    Dim url As String
+    
+    ' Anthropic API 여부 확인
+    Dim isAnthropicAPI As Boolean
+    isAnthropicAPI = False
+    
+    ' 모델명이나 baseUrl로 Anthropic 판단
+    If Not IsMissing(model) And Not IsEmpty(model) Then
+        If InStr(LCase(CStr(model)), "claude") > 0 Then
+            isAnthropicAPI = True
+        End If
+    End If
+    
     If Not IsMissing(baseUrl) And Not IsEmpty(baseUrl) Then
+        If InStr(LCase(CStr(baseUrl)), "anthropic") > 0 Then
+            isAnthropicAPI = True
+        End If
+    End If
+    
+    ' URL 설정
+    Dim url As String
+    If isAnthropicAPI Then
+        url = ANTHROPIC_URL
+    ElseIf Not IsMissing(baseUrl) And Not IsEmpty(baseUrl) Then
         Dim baseStr As String
         baseStr = CStr(baseUrl)
         If Right(baseStr, 1) <> "/" Then baseStr = baseStr & "/"
@@ -128,9 +200,14 @@ Function LLM_Base(prompt As String, Optional temperature As Variant, Optional ma
         url = url & "chat/completions"
     End If
     
+    ' 모델명 설정
     Dim modelName As String
     If IsMissing(model) Or IsEmpty(model) Then
-        modelName = DEFAULT_MODEL
+        If isAnthropicAPI Then
+            modelName = DEFAULT_ANTHROPIC_MODEL
+        Else
+            modelName = DEFAULT_MODEL
+        End If
     Else
         modelName = CStr(model)
     End If
@@ -141,7 +218,13 @@ Function LLM_Base(prompt As String, Optional temperature As Variant, Optional ma
     lowerUrl = LCase(url)
     
     If IsMissing(apiKey) Or IsEmpty(apiKey) Then
-        If InStr(lowerUrl, "gemini") > 0 Or InStr(LCase(modelName), "gemini") > 0 Then
+        If isAnthropicAPI Then
+            finalApiKey = Environ("ANTHROPIC_API_KEY")
+            If finalApiKey = "" Then
+                LLM_Base = "Error: Anthropic API requires an API key. Provide it as the last argument or set the ANTHROPIC_API_KEY environment variable."
+                Exit Function
+            End If
+        ElseIf InStr(lowerUrl, "gemini") > 0 Or InStr(LCase(modelName), "gemini") > 0 Then
             finalApiKey = Environ("GEMINI_API_KEY")
             If finalApiKey = "" Then
                 LLM_Base = "Error: Gemini API requires an API key. Provide it as the last argument or set the GEMINI_API_KEY environment variable."
@@ -167,19 +250,24 @@ Function LLM_Base(prompt As String, Optional temperature As Variant, Optional ma
         finalApiKey = CStr(apiKey)
     End If
     
+    ' JSON 페이로드 구성
     Dim jsonPayload As String
-    jsonPayload = BuildJsonPayload(modelName, EscapeText(prompt), temperature, maxTokens)
+    jsonPayload = BuildJsonPayload(modelName, EscapeText(prompt), temperature, maxTokens, isAnthropicAPI)
     
+    ' API 요청 및 응답 수신
     Dim response As String
-    response = SendLLMRequest(url, jsonPayload, finalApiKey)
+    response = SendLLMRequest(url, jsonPayload, finalApiKey, isAnthropicAPI)
     
     If Left(response, 6) = "Error:" Then
         LLM_Base = response
         Exit Function
     End If
     
-    LLM_Base = UnescapeText(ExtractContent(response))
+    ' 응답에서 콘텐츠 추출 및 반환
+    LLM_Base = UnescapeText(ExtractContent(response, isAnthropicAPI))
 End Function
+
+' 이하 기존 함수들은 LLM_Base를 호출하므로 그대로 유지
 
 ' Private 함수: 문자열 앞부분에 있는 모든 줄 바꿈(CR, LF) 제거
 Private Function RemoveLeadingLineBreaks(ByVal text As String) As String
