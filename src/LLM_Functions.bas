@@ -402,22 +402,98 @@ End Function
 
 Function LLM_EDIT(text As String, Optional prompt As String, Optional temperature As Variant, _
                   Optional maxTokens As Variant, Optional model As Variant, Optional baseUrl As Variant, _
-                  Optional showThink As Boolean = False, Optional apiKey As Variant) As Variant
-    ' 기본 프롬프트 설정: 사용자가 prompt를 입력하지 않은 경우
+                  Optional apiKey As Variant, Optional includeReview As Boolean = False) As Variant
+    ' Set default prompt if none provided
     If prompt = "" Then
-        prompt = "Please correct the following sentence for clarity, grammar, and punctuation:"
+        prompt = "Please edit and correct the following text:"
     End If
     
-    ' 입력 문장과 프롬프트를 결합하여 전체 요청 문장을 구성합니다.
+    ' Define format with simple delimiters that are easy to parse
     Dim fullPrompt As String
-    fullPrompt = prompt & " " & text
+    fullPrompt = prompt & " " & text & vbCrLf & vbCrLf & _
+                "Use these exact delimiters in your response:" & vbCrLf & _
+                "===REVIEW START===" & vbCrLf & _
+                "[Your explanation of corrections made]" & vbCrLf & _
+                "===REVIEW END===" & vbCrLf & _
+                "===RESULT START===" & vbCrLf & _
+                "[Corrected text only]" & vbCrLf & _
+                "===RESULT END===" & vbCrLf & vbCrLf & _
+                "IMPORTANT:" & vbCrLf & _
+                "1. Do NOT translate the text to another language." & vbCrLf & _
+                "2. Only correct grammar, spelling, punctuation, and clarity in the original language." & vbCrLf & _
+                "3. Use EXACTLY the format above with the exact delimiters shown." & vbCrLf & _
+                "4. Do not include any code blocks, backticks, or markdown formatting." & vbCrLf & _
+                "5. Provide your review comments in the SAME LANGUAGE as the original text."
     
-    ' LLM에게 요청 전송
+    ' Send request to the LLM
     Dim response As String
     response = LLM_Base(fullPrompt, temperature, maxTokens, model, baseUrl, apiKey)
     
-    ' 응답을 파싱하여 최종 결과를 반환합니다.
-    LLM_EDIT = ProcessLLMResponse(response, showThink)
+    ' Clean response from any code blocks if present
+    response = CleanTextFromMarkdown(response)
+    
+    ' Extract review and result sections using utility function
+    Dim reviewSection As String, resultSection As String
+    
+    ' Extract review section
+    reviewSection = ExtractContentBetweenDelimiters(response, "===REVIEW START===", "===REVIEW END===", "Could not extract review from LLM response.")
+    
+    ' Extract result section
+    resultSection = ExtractContentBetweenDelimiters(response, "===RESULT START===", "===RESULT END===", response)
+    
+    ' Apply ProcessLLMResponse for consistency with other functions if applicable
+    Dim processedResult As Variant
+    If InStr(1, resultSection, "<think>") > 0 Then
+        ' If result section contains think tags, process it
+        processedResult = ProcessLLMResponse(resultSection, includeReview)
+    Else
+        ' Otherwise use our extracted sections
+        If includeReview Then
+            Dim result(1) As String
+            result(0) = resultSection
+            result(1) = reviewSection
+            processedResult = result
+        Else
+            processedResult = resultSection
+        End If
+    End If
+    
+    LLM_EDIT = processedResult
+End Function
+
+' Utility function to clean text from markdown formatting
+Private Function CleanTextFromMarkdown(text As String) As String
+    Dim cleanedText As String
+    cleanedText = text
+    
+    ' Remove markdown code block markers
+    cleanedText = Replace(cleanedText, "```xml", "")
+    cleanedText = Replace(cleanedText, "```json", "")
+    cleanedText = Replace(cleanedText, "```", "")
+    
+    CleanTextFromMarkdown = cleanedText
+End Function
+
+' Utility function to extract content between delimiters
+Private Function ExtractContentBetweenDelimiters(text As String, startDelim As String, endDelim As String, Optional defaultValue As String = "") As String
+    Dim startPos As Long, endPos As Long
+    Dim result As String
+    
+    startPos = InStr(1, text, startDelim)
+    If startPos = 0 Then
+        result = defaultValue
+    Else
+        startPos = startPos + Len(startDelim)
+        endPos = InStr(startPos, text, endDelim)
+        
+        If endPos = 0 Then
+            result = defaultValue
+        Else
+            result = Trim(Mid(text, startPos, endPos - startPos))
+        End If
+    End If
+    
+    ExtractContentBetweenDelimiters = result
 End Function
 
 Function LLM_TRANSLATE(text As String, Optional targetLang As String = "", Optional sourceLang As String = "", _
