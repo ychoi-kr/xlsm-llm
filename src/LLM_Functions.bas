@@ -277,16 +277,17 @@ Private Function GetBaseUrlFromModel(ByVal modelName As String, Optional ByVal d
     lowerModel = LCase(modelName)
     
     If Left(lowerModel, 6) = "solar-" Then
-        ' Solar 모델인 경우 Upstage URL 반환
-        GetBaseUrlFromModel = UPSTAGE_URL
+        ' For Solar models, return Upstage base URL without "solar/" appended
+        ' This will be handled in ResolveModelAndBaseUrl
+        GetBaseUrlFromModel = "https://api.upstage.ai/v1/"
     ElseIf InStr(lowerModel, "claude") > 0 Then
-        ' Claude 모델인 경우 Anthropic URL 반환
+        ' Claude model returns Anthropic URL
         GetBaseUrlFromModel = ANTHROPIC_URL
     ElseIf defaultUrl <> "" Then
-        ' 기본 URL이 제공된 경우
+        ' Default URL provided
         GetBaseUrlFromModel = defaultUrl
     Else
-        ' 그 외의 경우 기본 OpenAI URL 반환
+        ' Otherwise, return default OpenAI URL
         GetBaseUrlFromModel = BASE_URL_DEFAULT
     End If
 End Function
@@ -311,22 +312,35 @@ Private Function GetApiKeyFromEnv(ByVal url As String, ByVal modelName As String
     End If
 End Function
 
-' 모델명과 baseUrl 정규화 함수 (공통 로직 추출)
+' Modify ResolveModelAndBaseUrl function to correctly handle Upstage Solar models
 Private Function ResolveModelAndBaseUrl(ByRef modelName As String, ByRef baseUrl As String, _
                                        Optional model As Variant, Optional baseUrlParam As Variant) As Boolean
-    ' 모델 이름 결정
+    ' Set model name from parameter or default
     If Not IsMissing(model) And Not IsEmpty(model) Then
         modelName = CStr(model)
     Else
         modelName = DEFAULT_MODEL
     End If
     
-    ' baseUrl 결정
+    ' Set baseUrl from parameter or determine from model
     If IsMissing(baseUrlParam) Or IsEmpty(baseUrlParam) Then
-        ' 모델명에 따라 baseUrl 자동 결정
+        ' Auto-determine baseUrl from model name
         baseUrl = GetBaseUrlFromModel(modelName)
     Else
         baseUrl = CStr(baseUrlParam)
+    End If
+    
+    ' Ensure URL ends with "/"
+    If Right(baseUrl, 1) <> "/" Then
+        baseUrl = baseUrl & "/"
+    End If
+    
+    ' For Upstage Solar models, construct correct endpoint format
+    If Left(LCase(modelName), 6) = "solar-" Then
+        ' If base URL already contains "solar/", don't append it again
+        If InStr(LCase(baseUrl), "solar/") = 0 Then
+            baseUrl = baseUrl & "solar/"
+        End If
     End If
     
     ResolveModelAndBaseUrl = True
@@ -370,30 +384,35 @@ Private Function ResolveApiKey(ByVal url As String, ByVal modelName As String, O
     ResolveApiKey = finalApiKey
 End Function
 
-' 통합된 LLM 요청 디스패처 (단일 메시지용)
+' Modify LLM_Dispatcher to use appropriate payload builder for Upstage models
 Private Function LLM_Dispatcher(ByVal userPrompt As String, Optional systemPrompt As String = "", _
                                Optional temperature As Variant, Optional maxTokens As Variant, _
                                Optional model As Variant, Optional baseUrl As Variant, _
                                Optional apiKey As Variant) As String
-    ' 변수 초기화
+    ' Variables initialization
     Dim modelName As String, effectiveBaseUrl As String
     
-    ' 모델과 URL 정규화
+    ' Normalize model and URL
     Call ResolveModelAndBaseUrl(modelName, effectiveBaseUrl, model, baseUrl)
     
-    ' 요청 처리
+    ' Request processing
     Dim response As String
     
     On Error GoTo ErrorHandler
     
     If IsAnthropicModelOrUrl(modelName, effectiveBaseUrl) Then
-        ' Anthropic API 사용
+        ' Anthropic API
         response = LLM_Base_Anthropic(systemPrompt, userPrompt, temperature, maxTokens, modelName, apiKey)
+    ElseIf Left(LCase(modelName), 6) = "solar-" Then
+        ' Upstage Solar model - use OpenAI chat completions format
+        Dim solarEndpoint As String
+        solarEndpoint = effectiveBaseUrl ' Already prepared in ResolveModelAndBaseUrl
+        response = LLM_Base_OpenAI(systemPrompt, userPrompt, temperature, maxTokens, modelName, solarEndpoint, apiKey)
     ElseIf systemPrompt <> "" Then
-        ' OpenAI 호환 API (시스템 프롬프트 있음)
+        ' OpenAI compatible API (with system prompt)
         response = LLM_Base_OpenAI(systemPrompt, userPrompt, temperature, maxTokens, modelName, effectiveBaseUrl, apiKey)
     Else
-        ' 단일 프롬프트 방식
+        ' Single prompt method
         response = LLM_Base_Simple(userPrompt, temperature, maxTokens, modelName, effectiveBaseUrl, apiKey)
     End If
     
