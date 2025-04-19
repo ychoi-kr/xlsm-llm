@@ -588,24 +588,28 @@ End Function
 ' JSON 페이로드 구성 - Anthropic 메시지 방식
 Private Function BuildJsonPayload_Anthropic(ByVal modelName As String, ByVal systemPrompt As String, ByVal userPrompt As String, _
                                      Optional ByVal temperature As Variant, Optional ByVal maxTokens As Variant) As String
+    ' Properly escape text for JSON
+    systemPrompt = EscapeForJSON(systemPrompt)
+    userPrompt = EscapeForJSON(userPrompt)
+    
     Dim jsonPayload As String
     
-    ' Anthropic API용 페이로드 구성
+    ' Anthropic API payload structure
     jsonPayload = "{" & _
                   """model"": """ & modelName & """"
     
-    ' System 메시지 추가 (선택적)
+    ' Add System message if provided
     If systemPrompt <> "" Then
-        jsonPayload = jsonPayload & ", ""system"": """ & Replace(systemPrompt, """", "\""") & """"
+        jsonPayload = jsonPayload & ", ""system"": """ & systemPrompt & """"
     End If
     
-    ' User 메시지 추가
+    ' Add User message
     jsonPayload = jsonPayload & ", ""messages"": [{" & _
                   """role"": ""user""," & _
-                  """content"": """ & Replace(userPrompt, """", "\""") & """" & _
+                  """content"": """ & userPrompt & """" & _
                   "}]"
     
-    ' Anthropic은 max_tokens가 필수
+    ' Anthropic requires max_tokens
     If IsMissing(maxTokens) Or IsEmpty(maxTokens) Then
         jsonPayload = jsonPayload & ", ""max_tokens"": 4096"
     ElseIf IsNumeric(maxTokens) Then
@@ -614,7 +618,7 @@ Private Function BuildJsonPayload_Anthropic(ByVal modelName As String, ByVal sys
         jsonPayload = jsonPayload & ", ""max_tokens"": 4096"
     End If
     
-    ' 온도 (temperature) 추가
+    ' Add temperature if provided
     If Not IsMissing(temperature) And Not IsEmpty(temperature) Then
         If IsNumeric(temperature) Then
             jsonPayload = jsonPayload & ", ""temperature"": " & temperature
@@ -1216,3 +1220,4 @@ Function LLM_CODE(programDetails As String, programmingLanguage As String, _
     
     LLM_CODE = ProcessLLMResponse(response, showThink)
 End Function
+
