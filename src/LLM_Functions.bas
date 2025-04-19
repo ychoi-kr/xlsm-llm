@@ -3,6 +3,7 @@ Option Explicit
 ' 상수 정의
 Const BASE_URL_DEFAULT As String = "https://api.openai.com/v1/"
 Const ANTHROPIC_URL As String = "https://api.anthropic.com/v1/messages"
+Const UPSTAGE_URL As String = "https://api.upstage.ai/v1/solar/" ' Added Upstage URL constant
 Const DEFAULT_MODEL As String = "gpt-4o-mini"
 Const DEFAULT_ANTHROPIC_MODEL As String = "claude-3-5-sonnet-20240620"
 
@@ -26,161 +27,9 @@ Private Sub SetAuthorizationHeader(ByRef http As Object, Optional apiKey As Vari
     End If
 End Sub
 
-' JSON 페이로드 구성 - 단일 프롬프트 방식
-Private Function BuildJsonPayload_Simple(ByVal modelName As String, ByVal prompt As String, _
-                                  Optional ByVal temperature As Variant, Optional ByVal maxTokens As Variant) As String
-    Dim jsonPayload As String
-    
-    ' 기존 OpenAI 호환 페이로드 구성
-    jsonPayload = "{" & _
-                  """model"": """ & modelName & """," & _
-                  """messages"": [{" & _
-                  """role"": ""user""," & _
-                  """content"": """ & Replace(prompt, """", "\""") & """" & _
-                  "}]"
-    
-    ' 온도 (temperature) 추가
-    If Not IsMissing(temperature) And Not IsEmpty(temperature) Then
-        If IsNumeric(temperature) Then
-            jsonPayload = jsonPayload & ", ""temperature"": " & temperature
-        End If
-    End If
-    
-    ' max_tokens 추가
-    If Not IsMissing(maxTokens) And Not IsEmpty(maxTokens) Then
-        If IsNumeric(maxTokens) Then
-            jsonPayload = jsonPayload & ", ""max_tokens"": " & maxTokens
-        End If
-    End If
-    
-    jsonPayload = jsonPayload & "}"
-    Debug.Print "jsonPayload in BuildJsonPayload_Simple:" & jsonPayload
-    BuildJsonPayload_Simple = jsonPayload
-End Function
-
-'===============================================================
-' 새로운 고급 함수 섹션 (role별 메시지 지원)
-'===============================================================
-
-Function LLM_Advanced(Optional systemPrompt As String = "", Optional userPrompt As String = "", _
-                     Optional temperature As Variant, Optional maxTokens As Variant, _
-                     Optional model As Variant, Optional baseUrl As Variant, _
-                     Optional showThink As Boolean = False, Optional apiKey As Variant) As Variant
-    ' 입력 검증: userPrompt는 필수
-    If userPrompt = "" Then
-        LLM_Advanced = "Error: userPrompt is required for LLM_Advanced"
-        Exit Function
-    End If
-    
-    ' Anthropic 모델인지 확인
-    Dim isAnthropicModel As Boolean
-    isAnthropicModel = False
-    
-    If Not IsMissing(model) And Not IsEmpty(model) Then
-        If InStr(LCase(CStr(model)), "claude") > 0 Then
-            isAnthropicModel = True
-        End If
-    End If
-    
-    Dim isAnthropicUrl As Boolean
-    isAnthropicUrl = False
-    
-    If Not IsMissing(baseUrl) And Not IsEmpty(baseUrl) Then
-        If InStr(LCase(CStr(baseUrl)), "anthropic") > 0 Then
-            isAnthropicUrl = True
-        End If
-    End If
-    
-    Dim response As String
-    If isAnthropicModel Or isAnthropicUrl Then
-        ' Anthropic API 사용
-        response = LLM_Base_Anthropic(systemPrompt, userPrompt, temperature, maxTokens, model, apiKey)
-    Else
-        ' OpenAI 호환 API 사용
-        response = LLM_Base_OpenAI(systemPrompt, userPrompt, temperature, maxTokens, model, baseUrl, apiKey)
-    End If
-    
-    LLM_Advanced = ProcessLLMResponse(response, showThink)
-End Function
-
-Function LLM_LIST(prompt As String, Optional model As Variant, Optional baseUrl As Variant, _
-                  Optional showThink As Boolean = False, Optional apiKey As Variant) As Variant
-    Dim listPrompt As String
-    ' 영어 프롬프트에 출력 형식 예시를 포함하여, 모델이 <list>와 <item> 태그를 사용해 출력하도록 명시합니다.
-    listPrompt = prompt & vbCrLf & _
-                 "Example:" & vbCrLf & _
-                 "<list><item>Apple</item><item>Banana</item><item>Cherry</item></list>" & vbCrLf & _
-                 "Please output only the list items enclosed within <list> and <item> tags, exactly in the above format, with no additional commentary."
-    
-    ' Anthropic 모델인지 확인
-    Dim isAnthropicModel As Boolean
-    isAnthropicModel = False
-    
-    If Not IsMissing(model) And Not IsEmpty(model) Then
-        If InStr(LCase(CStr(model)), "claude") > 0 Then
-            isAnthropicModel = True
-        End If
-    End If
-    
-    Dim isAnthropicUrl As Boolean
-    isAnthropicUrl = False
-    
-    If Not IsMissing(baseUrl) And Not IsEmpty(baseUrl) Then
-        If InStr(LCase(CStr(baseUrl)), "anthropic") > 0 Then
-            isAnthropicUrl = True
-        End If
-    End If
-    
-    Dim response As String
-    If isAnthropicModel Or isAnthropicUrl Then
-        ' Anthropic API 사용
-        response = LLM_Base_Anthropic("", listPrompt, , , model, apiKey)
-    Else
-        ' 기존 방식 유지
-        response = LLM_Base_Simple(listPrompt, , , model, baseUrl, apiKey)
-    End If
-    
-    Dim processedResponse As Variant
-    processedResponse = ProcessLLMResponse(response, showThink)
-    
-    Dim contentText As String, thinkText As String
-    If showThink Then
-        thinkText = processedResponse(0)
-        contentText = processedResponse(1)
-    Else
-        contentText = processedResponse
-    End If
-    
-    ' <item> 태그 사이의 리스트 항목들을 추출
-    Dim items() As String
-    Dim itemCount As Long
-    itemCount = 0
-    Dim searchPos As Long, startPos As Long, endPos As Long, currentItem As String
-    searchPos = 1
-    Do
-        startPos = InStr(searchPos, contentText, "<item>")
-        If startPos = 0 Then Exit Do
-        endPos = InStr(startPos, contentText, "</item>")
-        If endPos = 0 Then Exit Do
-        currentItem = Mid(contentText, startPos + Len("<item>"), endPos - startPos - Len("<item>"))
-        currentItem = Trim(currentItem)
-        ReDim Preserve items(itemCount)
-        items(itemCount) = currentItem
-        itemCount = itemCount + 1
-        searchPos = endPos + Len("</item>")
-    Loop
-    
-    ' showThink 옵션에 따라 결과 배열 반환:
-    ' - showThink가 False이면, 순수 리스트 배열만 반환
-    ' - showThink가 True이면, 첫 번째 요소는 think 내용, 두 번째 요소는 리스트 배열 반환
-    If showThink Then
-        Dim resultArray(1) As Variant
-        resultArray(0) = thinkText
-        resultArray(1) = items
-        LLM_LIST = resultArray
-    Else
-        LLM_LIST = items
-    End If
+' URL이 특정 서비스인지 확인하는 함수들
+Private Function isAnthropicUrl(ByVal url As String) As Boolean
+    isAnthropicUrl = (InStr(LCase(url), "anthropic") > 0)
 End Function
 
 Function LLM_EDIT(text As String, Optional prompt As String = "", Optional temperature As Variant, _
@@ -193,21 +42,17 @@ Function LLM_EDIT(text As String, Optional prompt As String = "", Optional tempe
         Exit Function
     End If
     
+    ' 모델 이름 및 URL 설정
+    Dim modelName As String, effectiveBaseUrl As String
+    Call ResolveModelAndBaseUrl(modelName, effectiveBaseUrl, model, baseUrl)
+    
     Dim systemPrompt As String
     Dim userPromptText As String
-    Dim effectiveModel As String
-    
-    ' Check model name
-    If Not IsMissing(model) And Not IsEmpty(model) Then
-        effectiveModel = CStr(model)
-    Else
-        effectiveModel = ""
-    End If
     
     ' Set appropriate prompts based on model type and user input
     If prompt = "" Then
         ' Default prompts when no prompt is provided
-        If InStr(1, LCase(effectiveModel), "solar-") > 0 Then
+        If InStr(1, LCase(modelName), "solar-") > 0 Then
             ' For Upstage Solar models
             systemPrompt = "Generate proofreading results for the input document."
             userPromptText = text
@@ -241,28 +86,9 @@ Function LLM_EDIT(text As String, Optional prompt As String = "", Optional tempe
         userPromptText = text
     End If
     
-    ' Determine if we're using Anthropic
-    Dim isAnthropicModel As Boolean
-    isAnthropicModel = False
-    
-    If Not IsMissing(model) And Not IsEmpty(model) Then
-        If InStr(LCase(CStr(model)), "claude") > 0 Then
-            isAnthropicModel = True
-        End If
-    End If
-    
-    Dim isAnthropicUrl As Boolean
-    isAnthropicUrl = False
-    
-    If Not IsMissing(baseUrl) And Not IsEmpty(baseUrl) Then
-        If InStr(LCase(CStr(baseUrl)), "anthropic") > 0 Then
-            isAnthropicUrl = True
-        End If
-    End If
-    
-    ' Make the API call based on model type
+    ' LLM 디스패처를 통해 요청 처리
     Dim response As String
-    If isAnthropicModel Or isAnthropicUrl Then
+    If IsAnthropicModelOrUrl(modelName, effectiveBaseUrl) Then
         ' For Anthropic models
         Dim anthropicPrompt As String
         If systemPrompt <> "" Then
@@ -271,10 +97,10 @@ Function LLM_EDIT(text As String, Optional prompt As String = "", Optional tempe
         Else
             anthropicPrompt = userPromptText
         End If
-        response = LLM_Base_Anthropic("", anthropicPrompt, temperature, maxTokens, model, apiKey)
+        response = LLM_Base_Anthropic("", anthropicPrompt, temperature, maxTokens, modelName, apiKey)
     Else
         ' For OpenAI and other models
-        response = LLM_Base_OpenAI(systemPrompt, userPromptText, temperature, maxTokens, model, baseUrl, apiKey)
+        response = LLM_Base_OpenAI(systemPrompt, userPromptText, temperature, maxTokens, modelName, effectiveBaseUrl, apiKey)
     End If
     
     ' Clean any markdown code blocks from the response
@@ -314,7 +140,7 @@ Function LLM_EDIT(text As String, Optional prompt As String = "", Optional tempe
         End If
     Else
         ' No review requested, just process the standard response
-        If prompt = "" And Not (InStr(1, LCase(effectiveModel), "solar-") > 0) Then
+        If prompt = "" And Not (InStr(1, LCase(modelName), "solar-") > 0) Then
             ' For default prompts, still extract the result section
             Dim resultOnly As String
             resultOnly = ExtractContentBetweenDelimiters(response, "===RESULT START===", "===RESULT END===", "")
@@ -336,23 +162,16 @@ Function LLM_TRANSLATE(text As String, Optional targetLang As String = "", Optio
                        Optional customPrompt As String = "", Optional temperature As Variant, _
                        Optional maxTokens As Variant, Optional model As Variant, Optional baseUrl As Variant, _
                        Optional showThink As Boolean = False, Optional apiKey As Variant) As Variant
+    ' 모델 이름 및 URL 설정
+    Dim modelName As String, effectiveBaseUrl As String
+    Call ResolveModelAndBaseUrl(modelName, effectiveBaseUrl, model, baseUrl)
+    
+    ' 프롬프트 구성
     Dim finalPrompt As String
-    Dim effectiveBaseUrl As String
-    Dim effectiveModel As String
-    
-    ' baseUrl과 model은 생략 시 기본값 처리
-    If Not IsMissing(baseUrl) And Not IsEmpty(baseUrl) Then effectiveBaseUrl = CStr(baseUrl)
-    If Not IsMissing(model) And Not IsEmpty(model) Then effectiveModel = CStr(model)
-    
-    ' 실제 사용될 baseUrl과 model 결정
-    Dim resolvedBaseUrl As String
-    Dim resolvedModel As String
-    resolvedBaseUrl = IIf(effectiveBaseUrl = "", BASE_URL_DEFAULT, effectiveBaseUrl)
-    resolvedModel = IIf(effectiveModel = "", DEFAULT_MODEL, effectiveModel)
     
     ' Upstage 번역 모델 체크
-    If IsUpstageUrl(resolvedBaseUrl) And _
-       (LCase(resolvedModel) = "translation-enko" Or LCase(resolvedModel) = "translation-koen") Then
+    If (Left(LCase(modelName), 6) = "solar-" Or IsUpstageUrl(effectiveBaseUrl)) And _
+       (LCase(modelName) = "translation-enko" Or LCase(modelName) = "translation-koen") Then
         finalPrompt = text ' 프롬프트 없이 text만 사용
     Else
         ' 다른 모델의 경우 targetLang 또는 customPrompt 중 하나가 필요
@@ -370,34 +189,11 @@ Function LLM_TRANSLATE(text As String, Optional targetLang As String = "", Optio
         End If
     End If
     
-    ' Anthropic 모델인지 확인
-    Dim isAnthropicModel As Boolean
-    isAnthropicModel = False
-    
-    If Not IsMissing(model) And Not IsEmpty(model) Then
-        If InStr(LCase(CStr(model)), "claude") > 0 Then
-            isAnthropicModel = True
-        End If
-    End If
-    
-    Dim isAnthropicUrl As Boolean
-    isAnthropicUrl = False
-    
-    If Not IsMissing(baseUrl) And Not IsEmpty(baseUrl) Then
-        If InStr(LCase(CStr(baseUrl)), "anthropic") > 0 Then
-            isAnthropicUrl = True
-        End If
-    End If
-    
+    ' LLM 디스패처를 통해 요청 처리
     Dim response As String
-    If isAnthropicModel Or isAnthropicUrl Then
-        ' Anthropic API 사용
-        response = LLM_Base_Anthropic("", finalPrompt, temperature, maxTokens, model, apiKey)
-    Else
-        ' 기존 방식 유지
-        response = LLM_Base_Simple(finalPrompt, temperature, maxTokens, model, baseUrl, apiKey)
-    End If
+    response = LLM_Dispatcher(finalPrompt, "", temperature, maxTokens, modelName, effectiveBaseUrl, apiKey)
     
+    ' 응답 처리 및 반환
     LLM_TRANSLATE = ProcessLLMResponse(response, showThink)
 End Function
 
@@ -406,6 +202,11 @@ Function LLM_REVIEW_TRANSLATION(originalText As String, translatedText As String
                                 Optional temperature As Variant, Optional maxTokens As Variant, _
                                 Optional model As Variant, Optional baseUrl As Variant, _
                                 Optional showThink As Boolean = False, Optional apiKey As Variant) As Variant
+    ' 모델 이름 및 URL 설정
+    Dim modelName As String, effectiveBaseUrl As String
+    Call ResolveModelAndBaseUrl(modelName, effectiveBaseUrl, model, baseUrl)
+    
+    ' 프롬프트 구성
     Dim fullPrompt As String
     
     ' 기본 프롬프트: 주안점이 없는 경우 균형 잡힌 감수 요청
@@ -422,36 +223,266 @@ Function LLM_REVIEW_TRANSLATION(originalText As String, translatedText As String
                      "Translated text: " & translatedText
     End If
     
-    ' Anthropic 모델인지 확인
-    Dim isAnthropicModel As Boolean
-    isAnthropicModel = False
-    
-    If Not IsMissing(model) And Not IsEmpty(model) Then
-        If InStr(LCase(CStr(model)), "claude") > 0 Then
-            isAnthropicModel = True
-        End If
-    End If
-    
-    Dim isAnthropicUrl As Boolean
-    isAnthropicUrl = False
-    
-    If Not IsMissing(baseUrl) And Not IsEmpty(baseUrl) Then
-        If InStr(LCase(CStr(baseUrl)), "anthropic") > 0 Then
-            isAnthropicUrl = True
-        End If
-    End If
-    
+    ' LLM 디스패처를 통해 요청 처리
     Dim response As String
-    If isAnthropicModel Or isAnthropicUrl Then
-        ' Anthropic API 사용
-        response = LLM_Base_Anthropic("", fullPrompt, temperature, maxTokens, model, apiKey)
-    Else
-        ' 기존 방식 유지
-        response = LLM_Base_Simple(fullPrompt, temperature, maxTokens, model, baseUrl, apiKey)
-    End If
+    response = LLM_Dispatcher(fullPrompt, "", temperature, maxTokens, modelName, effectiveBaseUrl, apiKey)
     
     ' 응답 처리 및 반환
     LLM_REVIEW_TRANSLATION = ProcessLLMResponse(response, showThink)
+End Function
+
+Function LLM_Advanced(Optional systemPrompt As String = "", Optional userPrompt As String = "", _
+                     Optional temperature As Variant, Optional maxTokens As Variant, _
+                     Optional model As Variant, Optional baseUrl As Variant, _
+                     Optional showThink As Boolean = False, Optional apiKey As Variant) As Variant
+    ' 입력 검증: userPrompt는 필수
+    If userPrompt = "" Then
+        LLM_Advanced = "Error: userPrompt is required for LLM_Advanced"
+        Exit Function
+    End If
+    
+    ' 모델 이름 및 URL 설정
+    Dim modelName As String, effectiveBaseUrl As String
+    Call ResolveModelAndBaseUrl(modelName, effectiveBaseUrl, model, baseUrl)
+    
+    ' LLM 요청 및 처리
+    Dim response As String
+    response = LLM_Dispatcher(userPrompt, systemPrompt, temperature, maxTokens, modelName, effectiveBaseUrl, apiKey)
+    
+    ' 응답 처리 및 반환
+    LLM_Advanced = ProcessLLMResponse(response, showThink)
+End Function
+
+Private Function IsOpenAiUrl(ByVal url As String) As Boolean
+    IsOpenAiUrl = (InStr(LCase(url), "openai.com") > 0)
+End Function
+
+Private Function IsUpstageUrl(ByVal url As String) As Boolean
+    IsUpstageUrl = (InStr(LCase(url), "upstage.ai") > 0)
+End Function
+
+Private Function IsGeminiUrl(ByVal url As String) As Boolean
+    IsGeminiUrl = (InStr(LCase(url), "gemini") > 0)
+End Function
+
+Private Function IsLocalLLM(ByVal url As String) As Boolean
+    Dim lowerUrl As String
+    lowerUrl = LCase(url)
+    IsLocalLLM = (InStr(lowerUrl, "localhost") > 0 Or InStr(lowerUrl, "127.0.0.1") > 0)
+End Function
+
+' 모델명으로 baseUrl 자동 결정 함수
+Private Function GetBaseUrlFromModel(ByVal modelName As String, Optional ByVal defaultUrl As String = "") As String
+    Dim lowerModel As String
+    lowerModel = LCase(modelName)
+    
+    If Left(lowerModel, 6) = "solar-" Then
+        ' Solar 모델인 경우 Upstage URL 반환
+        GetBaseUrlFromModel = UPSTAGE_URL
+    ElseIf InStr(lowerModel, "claude") > 0 Then
+        ' Claude 모델인 경우 Anthropic URL 반환
+        GetBaseUrlFromModel = ANTHROPIC_URL
+    ElseIf defaultUrl <> "" Then
+        ' 기본 URL이 제공된 경우
+        GetBaseUrlFromModel = defaultUrl
+    Else
+        ' 그 외의 경우 기본 OpenAI URL 반환
+        GetBaseUrlFromModel = BASE_URL_DEFAULT
+    End If
+End Function
+
+' API 키 환경 변수 조회
+Private Function GetApiKeyFromEnv(ByVal url As String, ByVal modelName As String) As String
+    Dim lowerUrl As String
+    lowerUrl = LCase(url)
+    Dim lowerModel As String
+    lowerModel = LCase(modelName)
+    
+    If isAnthropicUrl(url) Or InStr(lowerModel, "claude") > 0 Then
+        GetApiKeyFromEnv = Environ("ANTHROPIC_API_KEY")
+    ElseIf IsGeminiUrl(url) Or InStr(lowerModel, "gemini") > 0 Then
+        GetApiKeyFromEnv = Environ("GEMINI_API_KEY")
+    ElseIf IsOpenAiUrl(url) Or InStr(lowerModel, "gpt") > 0 Then
+        GetApiKeyFromEnv = Environ("OPENAI_API_KEY")
+    ElseIf IsUpstageUrl(url) Or Left(lowerModel, 6) = "solar-" Then
+        GetApiKeyFromEnv = Environ("UPSTAGE_API_KEY")
+    Else
+        GetApiKeyFromEnv = ""  ' 로컬 LLM 등 다른 경우
+    End If
+End Function
+
+' 모델명과 baseUrl 정규화 함수 (공통 로직 추출)
+Private Function ResolveModelAndBaseUrl(ByRef modelName As String, ByRef baseUrl As String, _
+                                       Optional model As Variant, Optional baseUrlParam As Variant) As Boolean
+    ' 모델 이름 결정
+    If Not IsMissing(model) And Not IsEmpty(model) Then
+        modelName = CStr(model)
+    Else
+        modelName = DEFAULT_MODEL
+    End If
+    
+    ' baseUrl 결정
+    If IsMissing(baseUrlParam) Or IsEmpty(baseUrlParam) Then
+        ' 모델명에 따라 baseUrl 자동 결정
+        baseUrl = GetBaseUrlFromModel(modelName)
+    Else
+        baseUrl = CStr(baseUrlParam)
+    End If
+    
+    ResolveModelAndBaseUrl = True
+End Function
+
+' Anthropic 모델 또는 URL인지 확인하는 함수
+Private Function IsAnthropicModelOrUrl(ByVal modelName As String, ByVal baseUrl As String) As Boolean
+    IsAnthropicModelOrUrl = (InStr(LCase(modelName), "claude") > 0) Or (InStr(LCase(baseUrl), "anthropic") > 0)
+End Function
+
+' API 키 확인 및 오류 처리를 위한 공통 함수
+Private Function ResolveApiKey(ByVal url As String, ByVal modelName As String, Optional apiKey As Variant) As String
+    Dim finalApiKey As String
+    Dim errorMessage As String
+    
+    ' API 키 설정
+    If IsMissing(apiKey) Or IsEmpty(apiKey) Then
+        finalApiKey = GetApiKeyFromEnv(url, modelName)
+        
+        ' 필요한 API 키가 없는 경우 에러 메시지 생성
+        If finalApiKey = "" And Not IsLocalLLM(url) Then
+            ' 로컬 LLM이 아닌 경우만 API 키 필요
+            Dim apiKeyEnvName As String
+            If IsOpenAiUrl(url) Then
+                apiKeyEnvName = "OPENAI_API_KEY"
+            ElseIf IsGeminiUrl(url) Then
+                apiKeyEnvName = "GEMINI_API_KEY"
+            ElseIf IsUpstageUrl(url) Or Left(LCase(modelName), 6) = "solar-" Then
+                apiKeyEnvName = "UPSTAGE_API_KEY"
+            Else
+                apiKeyEnvName = "appropriate"
+            End If
+            
+            errorMessage = "Error: API requires an api key. Provide it as the last argument or set the " & apiKeyEnvName & " environment variable."
+            Err.Raise vbObjectError + 1000, "ResolveApiKey", errorMessage
+        End If
+    Else
+        finalApiKey = CStr(apiKey)
+    End If
+    
+    ResolveApiKey = finalApiKey
+End Function
+
+' 통합된 LLM 요청 디스패처 (단일 메시지용)
+Private Function LLM_Dispatcher(ByVal userPrompt As String, Optional systemPrompt As String = "", _
+                               Optional temperature As Variant, Optional maxTokens As Variant, _
+                               Optional model As Variant, Optional baseUrl As Variant, _
+                               Optional apiKey As Variant) As String
+    ' 변수 초기화
+    Dim modelName As String, effectiveBaseUrl As String
+    
+    ' 모델과 URL 정규화
+    Call ResolveModelAndBaseUrl(modelName, effectiveBaseUrl, model, baseUrl)
+    
+    ' 요청 처리
+    Dim response As String
+    
+    On Error GoTo ErrorHandler
+    
+    If IsAnthropicModelOrUrl(modelName, effectiveBaseUrl) Then
+        ' Anthropic API 사용
+        response = LLM_Base_Anthropic(systemPrompt, userPrompt, temperature, maxTokens, modelName, apiKey)
+    ElseIf systemPrompt <> "" Then
+        ' OpenAI 호환 API (시스템 프롬프트 있음)
+        response = LLM_Base_OpenAI(systemPrompt, userPrompt, temperature, maxTokens, modelName, effectiveBaseUrl, apiKey)
+    Else
+        ' 단일 프롬프트 방식
+        response = LLM_Base_Simple(userPrompt, temperature, maxTokens, modelName, effectiveBaseUrl, apiKey)
+    End If
+    
+    LLM_Dispatcher = response
+    Exit Function
+    
+ErrorHandler:
+    LLM_Dispatcher = "Error: " & Err.Description
+End Function
+
+' 텍스트 이스케이프
+Private Function EscapeText(ByVal text As String) As String
+    Dim result As String
+    result = Replace(text, "\", "\\")
+    result = Replace(result, vbCrLf, "\n")
+    result = Replace(result, vbLf, "\n")
+    result = Replace(result, """", "\""")
+    EscapeText = result
+End Function
+
+' 텍스트 이스케이프 해제
+Private Function UnescapeText(ByVal text As String) As String
+    Dim result As String
+    result = Replace(text, "\n", vbLf)
+    result = Replace(result, "\\", "\")
+    result = Replace(result, "\""", """")
+    UnescapeText = result
+End Function
+
+' Helper function to properly escape text for JSON
+Private Function EscapeForJSON(ByVal text As String) As String
+    ' First replace backslashes
+    Dim result As String
+    result = Replace(text, "\", "\\")
+    
+    ' Replace quotes
+    result = Replace(result, """", "\""")
+    
+    ' Replace newlines
+    result = Replace(result, vbCrLf, "\n")
+    result = Replace(result, vbLf, "\n")
+    result = Replace(result, vbCr, "\n")
+    
+    ' Replace tabs
+    result = Replace(result, vbTab, "\t")
+    
+    ' Replace backspace
+    result = Replace(result, Chr(8), "\b")
+    
+    ' Replace form feed
+    result = Replace(result, Chr(12), "\f")
+    
+    EscapeForJSON = result
+End Function
+
+'===============================================================
+' JSON 페이로드 구성 함수들
+'===============================================================
+
+' JSON 페이로드 구성 - 단일 프롬프트 방식
+Private Function BuildJsonPayload_Simple(ByVal modelName As String, ByVal prompt As String, _
+                                  Optional ByVal temperature As Variant, Optional ByVal maxTokens As Variant) As String
+    Dim jsonPayload As String
+    
+    ' 기존 OpenAI 호환 페이로드 구성
+    jsonPayload = "{" & _
+                  """model"": """ & modelName & """," & _
+                  """messages"": [{" & _
+                  """role"": ""user""," & _
+                  """content"": """ & Replace(prompt, """", "\""") & """" & _
+                  "}]"
+    
+    ' 온도 (temperature) 추가
+    If Not IsMissing(temperature) And Not IsEmpty(temperature) Then
+        If IsNumeric(temperature) Then
+            jsonPayload = jsonPayload & ", ""temperature"": " & temperature
+        End If
+    End If
+    
+    ' max_tokens 추가
+    If Not IsMissing(maxTokens) And Not IsEmpty(maxTokens) Then
+        If IsNumeric(maxTokens) Then
+            jsonPayload = jsonPayload & ", ""max_tokens"": " & maxTokens
+        End If
+    End If
+    
+    jsonPayload = jsonPayload & "}"
+    Debug.Print "jsonPayload in BuildJsonPayload_Simple:" & jsonPayload
+    BuildJsonPayload_Simple = jsonPayload
 End Function
 
 ' JSON 페이로드 구성 - OpenAI role별 메시지 방식
@@ -505,6 +536,7 @@ Private Function BuildJsonPayload_OpenAI_responses(ByVal modelName As String, By
     BuildJsonPayload_OpenAI_responses = jsonPayload
 End Function
 
+' JSON 페이로드 구성 - OpenAI chat completions 방식
 Private Function BuildJsonPayload_OpenAI_chatcompletions(ByVal modelName As String, ByVal systemPrompt As String, ByVal userPrompt As String, _
                                   Optional ByVal temperature As Variant, Optional ByVal maxTokens As Variant) As String
     ' Properly escape text for JSON
@@ -559,32 +591,6 @@ Private Function BuildJsonPayload_OpenAI_chatcompletions(ByVal modelName As Stri
     BuildJsonPayload_OpenAI_chatcompletions = jsonPayload
 End Function
 
-' Helper function to properly escape text for JSON
-Private Function EscapeForJSON(ByVal text As String) As String
-    ' First replace backslashes
-    Dim result As String
-    result = Replace(text, "\", "\\")
-    
-    ' Replace quotes
-    result = Replace(result, """", "\""")
-    
-    ' Replace newlines
-    result = Replace(result, vbCrLf, "\n")
-    result = Replace(result, vbLf, "\n")
-    result = Replace(result, vbCr, "\n")
-    
-    ' Replace tabs
-    result = Replace(result, vbTab, "\t")
-    
-    ' Replace backspace
-    result = Replace(result, Chr(8), "\b")
-    
-    ' Replace form feed
-    result = Replace(result, Chr(12), "\f")
-    
-    EscapeForJSON = result
-End Function
-
 ' JSON 페이로드 구성 - Anthropic 메시지 방식
 Private Function BuildJsonPayload_Anthropic(ByVal modelName As String, ByVal systemPrompt As String, ByVal userPrompt As String, _
                                      Optional ByVal temperature As Variant, Optional ByVal maxTokens As Variant) As String
@@ -628,6 +634,10 @@ Private Function BuildJsonPayload_Anthropic(ByVal modelName As String, ByVal sys
     jsonPayload = jsonPayload & "}"
     BuildJsonPayload_Anthropic = jsonPayload
 End Function
+
+'===============================================================
+' HTTP 통신 및 응답 처리 함수들
+'===============================================================
 
 ' HTTP 요청 전송
 Private Function SendLLMRequest(ByVal url As String, ByVal jsonPayload As String, _
@@ -790,277 +800,6 @@ Private Function CleanTextFromMarkdown(ByVal text As String) As String
     Set regEx = Nothing
 End Function
 
-' 텍스트 이스케이프
-Private Function EscapeText(ByVal text As String) As String
-    Dim result As String
-    result = Replace(text, "\", "\\")
-    result = Replace(result, vbCrLf, "\n")
-    result = Replace(result, vbLf, "\n")
-    result = Replace(result, """", "\""")
-    EscapeText = result
-End Function
-
-' 텍스트 이스케이프 해제
-Private Function UnescapeText(ByVal text As String) As String
-    Dim result As String
-    result = Replace(text, "\n", vbLf)
-    result = Replace(result, "\\", "\")
-    result = Replace(result, "\""", """")
-    UnescapeText = result
-End Function
-
-' URL이 특정 서비스인지 확인하는 함수들
-Private Function isAnthropicUrl(ByVal url As String) As Boolean
-    isAnthropicUrl = (InStr(LCase(url), "anthropic") > 0)
-End Function
-
-Private Function IsOpenAiUrl(ByVal url As String) As Boolean
-    IsOpenAiUrl = (InStr(LCase(url), "openai.com") > 0)
-End Function
-
-Private Function IsUpstageUrl(ByVal url As String) As Boolean
-    IsUpstageUrl = (InStr(LCase(url), "upstage.ai") > 0)
-End Function
-
-Private Function IsGeminiUrl(ByVal url As String) As Boolean
-    IsGeminiUrl = (InStr(LCase(url), "gemini") > 0)
-End Function
-
-Private Function IsLocalLLM(ByVal url As String) As Boolean
-    Dim lowerUrl As String
-    lowerUrl = LCase(url)
-    IsLocalLLM = (InStr(lowerUrl, "localhost") > 0 Or InStr(lowerUrl, "127.0.0.1") > 0)
-End Function
-
-' API 키 환경 변수 조회
-Private Function GetApiKeyFromEnv(ByVal url As String, ByVal modelName As String) As String
-    Dim lowerUrl As String
-    lowerUrl = LCase(url)
-    Dim lowerModel As String
-    lowerModel = LCase(modelName)
-    
-    If isAnthropicUrl(url) Or InStr(lowerModel, "claude") > 0 Then
-        GetApiKeyFromEnv = Environ("ANTHROPIC_API_KEY")
-    ElseIf IsGeminiUrl(url) Or InStr(lowerModel, "gemini") > 0 Then
-        GetApiKeyFromEnv = Environ("GEMINI_API_KEY")
-    ElseIf IsOpenAiUrl(url) Or InStr(lowerModel, "gpt") > 0 Then
-        GetApiKeyFromEnv = Environ("OPENAI_API_KEY")
-    ElseIf IsUpstageUrl(url) Or InStr(lowerModel, "solar") > 0 Then
-        GetApiKeyFromEnv = Environ("UPSTAGE_API_KEY")
-    Else
-        GetApiKeyFromEnv = ""  ' 로컬 LLM 등 다른 경우
-    End If
-End Function
-
-'===============================================================
-' 베이스 LLM 함수 섹션
-'===============================================================
-
-' 1. 단일 프롬프트 방식 (기존 방식 유지)
-Function LLM_Base_Simple(prompt As String, Optional temperature As Variant, Optional maxTokens As Variant, _
-                        Optional model As Variant, Optional baseUrl As Variant, Optional apiKey As Variant) As String
-    ' URL 설정
-    Dim url As String
-    If Not IsMissing(baseUrl) And Not IsEmpty(baseUrl) Then
-        Dim baseStr As String
-        baseStr = CStr(baseUrl)
-        If Right(baseStr, 1) <> "/" Then baseStr = baseStr & "/"
-        url = baseStr & "chat/completions"
-    Else
-        url = BASE_URL_DEFAULT
-        If Right(url, 1) <> "/" Then url = url & "/"
-        url = url & "chat/completions"
-    End If
-    
-    ' 모델명 설정
-    Dim modelName As String
-    If IsMissing(model) Or IsEmpty(model) Then
-        modelName = DEFAULT_MODEL
-    Else
-        modelName = CStr(model)
-    End If
-    
-    ' API 키 확인 및 설정
-    Dim finalApiKey As String
-    If IsMissing(apiKey) Or IsEmpty(apiKey) Then
-        finalApiKey = GetApiKeyFromEnv(url, modelName)
-        
-        ' 필요한 API 키가 없는 경우 에러 반환
-        If finalApiKey = "" And Not IsLocalLLM(url) Then
-            ' 로컬 LLM이 아닌 경우만 API 키 필요
-            Dim apiKeyEnvName As String
-            If IsOpenAiUrl(url) Then
-                apiKeyEnvName = "OPENAI_API_KEY"
-            ElseIf IsGeminiUrl(url) Then
-                apiKeyEnvName = "GEMINI_API_KEY"
-            ElseIf IsUpstageUrl(url) Then
-                apiKeyEnvName = "UPSTAGE_API_KEY"
-            Else
-                apiKeyEnvName = "appropriate"
-            End If
-            
-            LLM_Base_Simple = "Error: API requires an api key. Provide it as the last argument or set the " & apiKeyEnvName & " environment variable."
-            Exit Function
-        End If
-    Else
-        finalApiKey = CStr(apiKey)
-    End If
-    
-    ' JSON 페이로드 구성
-    Dim jsonPayload As String
-    jsonPayload = BuildJsonPayload_Simple(modelName, EscapeText(prompt), temperature, maxTokens)
-    Debug.Print "jsonPayload in LLM_Base_Simple: " & jsonPayload
-    
-    ' API 요청 및 응답 수신
-    Dim response As String
-    response = SendLLMRequest(url, jsonPayload, finalApiKey)
-    
-    If Left(response, 6) = "Error:" Then
-        LLM_Base_Simple = response
-        Exit Function
-    End If
-    
-    ' 응답에서 콘텐츠 추출 및 반환
-    LLM_Base_Simple = UnescapeText(ExtractContent(response))
-End Function
-
-Function LLM_Base_OpenAI(Optional systemPrompt As String = "", Optional userPrompt As String = "", _
-                        Optional temperature As Variant, Optional maxTokens As Variant, _
-                        Optional model As Variant, Optional baseUrl As Variant, Optional apiKey As Variant) As String
-    
-    ' Ensure we have at least one non-empty prompt
-    If Trim(systemPrompt) = "" And Trim(userPrompt) = "" Then
-        LLM_Base_OpenAI = "Error: At least one of systemPrompt or userPrompt must be provided"
-        Exit Function
-    End If
-    
-    ' URL setup - fix the bug with URL assignment
-    Dim url As String
-    If Not IsMissing(baseUrl) And Not IsEmpty(baseUrl) Then
-        Dim baseStr As String
-        baseStr = CStr(baseUrl)
-        ' Correct the URL formation
-        If Right(baseStr, 1) <> "/" Then
-            url = baseStr & "/"
-        Else
-            url = baseStr
-        End If
-    Else
-        url = BASE_URL_DEFAULT
-        If Right(url, 1) <> "/" Then
-            url = url & "/"
-        End If
-    End If
-    
-    ' Model name setup
-    Dim modelName As String
-    If IsMissing(model) Or IsEmpty(model) Then
-        modelName = DEFAULT_MODEL
-    Else
-        modelName = CStr(model)
-    End If
-    
-    ' API key verification and setup
-    Dim finalApiKey As String
-    If IsMissing(apiKey) Or IsEmpty(apiKey) Then
-        finalApiKey = GetApiKeyFromEnv(url, modelName)
-        
-        ' Return error if required API key is missing
-        If finalApiKey = "" And Not IsLocalLLM(url) Then
-            Dim apiKeyEnvName As String
-            If IsOpenAiUrl(url) Then
-                apiKeyEnvName = "OPENAI_API_KEY"
-            ElseIf IsGeminiUrl(url) Then
-                apiKeyEnvName = "GEMINI_API_KEY"
-            ElseIf IsUpstageUrl(url) Then
-                apiKeyEnvName = "UPSTAGE_API_KEY"
-            Else
-                apiKeyEnvName = "appropriate"
-            End If
-            
-            LLM_Base_OpenAI = "Error: API requires an api key. Provide it as the last argument or set the " & apiKeyEnvName & " environment variable."
-            Exit Function
-        End If
-    Else
-        finalApiKey = CStr(apiKey)
-    End If
-
-    ' Create the JSON payload based on the API type
-    Dim jsonPayload As String
-    If IsUpstageUrl(url) Then
-        url = url & "chat/completions"
-        jsonPayload = BuildJsonPayload_OpenAI_chatcompletions(modelName, systemPrompt, userPrompt, temperature, maxTokens)
-    Else ' Default to OpenAI format if not explicitly Upstage
-        url = url & "chat/completions"
-        jsonPayload = BuildJsonPayload_OpenAI_chatcompletions(modelName, systemPrompt, userPrompt, temperature, maxTokens)
-    End If
-    
-    ' Debug: Uncomment to see what's being sent
-    ' Debug.Print "URL: " & url
-    ' Debug.Print "JSON: " & jsonPayload
-    
-    ' Send the API request and get the response
-    Dim response As String
-    response = SendLLMRequest(url, jsonPayload, finalApiKey)
-    
-    If Left(response, 6) = "Error:" Then
-        LLM_Base_OpenAI = response
-        Exit Function
-    End If
-    
-    ' Extract content from the response and return
-    LLM_Base_OpenAI = UnescapeText(ExtractContent(response))
-End Function
-
-Function LLM_Base_Anthropic(Optional systemPrompt As String = "", Optional userPrompt As String = "", _
-                           Optional temperature As Variant, Optional maxTokens As Variant, _
-                           Optional model As Variant, Optional apiKey As Variant) As String
-    
-    ' URL은 고정 (Anthropic API)
-    Dim url As String
-    url = ANTHROPIC_URL
-    
-    ' 모델명 설정
-    Dim modelName As String
-    If IsMissing(model) Or IsEmpty(model) Then
-        modelName = DEFAULT_ANTHROPIC_MODEL
-    Else
-        modelName = CStr(model)
-    End If
-    
-    ' API 키 확인 및 설정
-    Dim finalApiKey As String
-    If IsMissing(apiKey) Or IsEmpty(apiKey) Then
-        finalApiKey = Environ("ANTHROPIC_API_KEY")
-        If finalApiKey = "" Then
-            LLM_Base_Anthropic = "Error: Anthropic API requires an API key. Provide it as the last argument or set the ANTHROPIC_API_KEY environment variable."
-            Exit Function
-        End If
-    Else
-        finalApiKey = CStr(apiKey)
-    End If
-    
-    ' JSON 페이로드 구성
-    Dim jsonPayload As String
-    jsonPayload = BuildJsonPayload_Anthropic(modelName, systemPrompt, userPrompt, temperature, maxTokens)
-    
-    ' API 요청 및 응답 수신
-    Dim response As String
-    response = SendLLMRequest(url, jsonPayload, finalApiKey, True)  ' Anthropic API임을 명시
-    
-    If Left(response, 6) = "Error:" Then
-        LLM_Base_Anthropic = response
-        Exit Function
-    End If
-    
-    ' 응답에서 콘텐츠 추출 및 반환
-    LLM_Base_Anthropic = UnescapeText(ExtractContent(response, True))  ' Anthropic 응답 파싱
-End Function
-
-'===============================================================
-' 콘텐츠 처리 유틸리티 함수 섹션
-'===============================================================
-
 ' 문자열 앞부분에 있는 모든 줄 바꿈(CR, LF) 제거
 Private Function RemoveLeadingLineBreaks(ByVal text As String) As String
     Do While Len(text) > 0
@@ -1103,121 +842,302 @@ Private Function ProcessLLMResponse(response As String, Optional showThink As Bo
 End Function
 
 '===============================================================
-' 사용자 인터페이스 함수 섹션 (기존 함수들을 새 베이스 함수로 연결)
+' 베이스 LLM 함수들
+'===============================================================
+
+' 단일 프롬프트 방식 (기존 방식 유지하면서 중복 코드 제거)
+Function LLM_Base_Simple(prompt As String, Optional temperature As Variant, Optional maxTokens As Variant, _
+                        Optional model As Variant, Optional baseUrl As Variant, Optional apiKey As Variant) As String
+    ' 모델명 설정
+    Dim modelName As String
+    If IsMissing(model) Or IsEmpty(model) Then
+        modelName = DEFAULT_MODEL
+    Else
+        modelName = CStr(model)
+    End If
+    
+    ' URL 설정
+    Dim url As String
+    If Not IsMissing(baseUrl) And Not IsEmpty(baseUrl) Then
+        Dim baseStr As String
+        baseStr = CStr(baseUrl)
+        If Right(baseStr, 1) <> "/" Then baseStr = baseStr & "/"
+        url = baseStr & "chat/completions"
+    Else
+        ' 모델명에 따라 baseUrl 자동 결정
+        Dim autoBaseUrl As String
+        autoBaseUrl = GetBaseUrlFromModel(modelName)
+        
+        If autoBaseUrl <> "" Then
+            If Right(autoBaseUrl, 1) <> "/" Then autoBaseUrl = autoBaseUrl & "/"
+            url = autoBaseUrl & "chat/completions"
+        Else
+            url = BASE_URL_DEFAULT
+            If Right(url, 1) <> "/" Then url = url & "/"
+            url = url & "chat/completions"
+        End If
+    End If
+    
+    On Error Resume Next
+    ' API 키 확인 및 설정
+    Dim finalApiKey As String
+    finalApiKey = ResolveApiKey(url, modelName, apiKey)
+    
+    If Err.Number <> 0 Then
+        LLM_Base_Simple = Err.Description
+        Err.Clear
+        Exit Function
+    End If
+    On Error GoTo 0
+    
+    ' JSON 페이로드 구성
+    Dim jsonPayload As String
+    jsonPayload = BuildJsonPayload_Simple(modelName, EscapeText(prompt), temperature, maxTokens)
+    
+    ' API 요청 및 응답 수신
+    Dim response As String
+    response = SendLLMRequest(url, jsonPayload, finalApiKey)
+    
+    If Left(response, 6) = "Error:" Then
+        LLM_Base_Simple = response
+        Exit Function
+    End If
+    
+    ' 응답에서 콘텐츠 추출 및 반환
+    LLM_Base_Simple = UnescapeText(ExtractContent(response))
+End Function
+
+' OpenAI 호환 채팅 완성 방식
+Function LLM_Base_OpenAI(Optional systemPrompt As String = "", Optional userPrompt As String = "", _
+                        Optional temperature As Variant, Optional maxTokens As Variant, _
+                        Optional model As Variant, Optional baseUrl As Variant, Optional apiKey As Variant) As String
+    
+    ' Ensure we have at least one non-empty prompt
+    If Trim(systemPrompt) = "" And Trim(userPrompt) = "" Then
+        LLM_Base_OpenAI = "Error: At least one of systemPrompt or userPrompt must be provided"
+        Exit Function
+    End If
+    
+    ' Model name setup
+    Dim modelName As String
+    If IsMissing(model) Or IsEmpty(model) Then
+        modelName = DEFAULT_MODEL
+    Else
+        modelName = CStr(model)
+    End If
+    
+    ' URL setup with automatic base URL determination from model name if needed
+    Dim url As String
+    If Not IsMissing(baseUrl) And Not IsEmpty(baseUrl) Then
+        Dim baseStr As String
+        baseStr = CStr(baseUrl)
+        ' Correct the URL formation
+        If Right(baseStr, 1) <> "/" Then
+            url = baseStr & "/"
+        Else
+            url = baseStr
+        End If
+    Else
+        ' 모델명에 따라 baseUrl 자동 결정
+        Dim autoBaseUrl As String
+        autoBaseUrl = GetBaseUrlFromModel(modelName)
+        
+        If autoBaseUrl <> "" Then
+            If Right(autoBaseUrl, 1) <> "/" Then
+                url = autoBaseUrl & "/"
+            Else
+                url = autoBaseUrl
+            End If
+        Else
+            url = BASE_URL_DEFAULT
+            If Right(url, 1) <> "/" Then
+                url = url & "/"
+            End If
+        End If
+    End If
+    
+    ' 채팅 완성 엔드포인트 추가
+    url = url & "chat/completions"
+    
+    On Error Resume Next
+    ' API 키 확인 및 설정
+    Dim finalApiKey As String
+    finalApiKey = ResolveApiKey(url, modelName, apiKey)
+    
+    If Err.Number <> 0 Then
+        LLM_Base_OpenAI = Err.Description
+        Err.Clear
+        Exit Function
+    End If
+    On Error GoTo 0
+
+    ' Create the JSON payload based on the API type
+    Dim jsonPayload As String
+    jsonPayload = BuildJsonPayload_OpenAI_chatcompletions(modelName, systemPrompt, userPrompt, temperature, maxTokens)
+    
+    ' Send the API request and get the response
+    Dim response As String
+    response = SendLLMRequest(url, jsonPayload, finalApiKey)
+    
+    If Left(response, 6) = "Error:" Then
+        LLM_Base_OpenAI = response
+        Exit Function
+    End If
+    
+    ' Extract content from the response and return
+    LLM_Base_OpenAI = UnescapeText(ExtractContent(response))
+End Function
+
+' Anthropic API 방식
+Function LLM_Base_Anthropic(Optional systemPrompt As String = "", Optional userPrompt As String = "", _
+                           Optional temperature As Variant, Optional maxTokens As Variant, _
+                           Optional model As Variant, Optional apiKey As Variant) As String
+    
+    ' URL은 고정 (Anthropic API)
+    Dim url As String
+    url = ANTHROPIC_URL
+    
+    ' 모델명 설정
+    Dim modelName As String
+    If IsMissing(model) Or IsEmpty(model) Then
+        modelName = DEFAULT_ANTHROPIC_MODEL
+    Else
+        modelName = CStr(model)
+    End If
+    
+    On Error Resume Next
+    ' API 키 확인 및 설정
+    Dim finalApiKey As String
+    finalApiKey = ResolveApiKey(url, modelName, apiKey)
+    
+    If Err.Number <> 0 Then
+        LLM_Base_Anthropic = Err.Description
+        Err.Clear
+        Exit Function
+    End If
+    On Error GoTo 0
+    
+    ' JSON 페이로드 구성
+    Dim jsonPayload As String
+    jsonPayload = BuildJsonPayload_Anthropic(modelName, systemPrompt, userPrompt, temperature, maxTokens)
+    
+    ' API 요청 및 응답 수신
+    Dim response As String
+    response = SendLLMRequest(url, jsonPayload, finalApiKey, True)  ' Anthropic API임을 명시
+    
+    If Left(response, 6) = "Error:" Then
+        LLM_Base_Anthropic = response
+        Exit Function
+    End If
+    
+    ' 응답에서 콘텐츠 추출 및 반환
+    LLM_Base_Anthropic = UnescapeText(ExtractContent(response, True))  ' Anthropic 응답 파싱
+End Function
+
+'===============================================================
+' 사용자 인터페이스 함수 섹션 - 중복 코드 제거
 '===============================================================
 
 Function LLM(prompt As String, Optional value As String = "", Optional temperature As Variant, _
              Optional maxTokens As Variant, Optional model As Variant, Optional baseUrl As Variant, _
              Optional showThink As Boolean = False, Optional apiKey As Variant) As Variant
+    ' 프롬프트 구성
     Dim fullPrompt As String
     fullPrompt = prompt
     If value <> "" Then fullPrompt = fullPrompt & " " & value
     
-    ' Anthropic 모델인지 확인
-    Dim isAnthropicModel As Boolean
-    isAnthropicModel = False
-    
-    If Not IsMissing(model) And Not IsEmpty(model) Then
-        If InStr(LCase(CStr(model)), "claude") > 0 Then
-            isAnthropicModel = True
-        End If
-    End If
-    
-    Dim isAnthropicUrl As Boolean
-    isAnthropicUrl = False
-    
-    If Not IsMissing(baseUrl) And Not IsEmpty(baseUrl) Then
-        If InStr(LCase(CStr(baseUrl)), "anthropic") > 0 Then
-            isAnthropicUrl = True
-        End If
-    End If
-
+    ' LLM 디스패처를 통해 요청 처리
     Dim response As String
-    If isAnthropicModel Or isAnthropicUrl Then
-        ' Anthropic API 사용
-        response = LLM_Base_Anthropic("", fullPrompt, temperature, maxTokens, model, apiKey)
-    Else
-        ' 기존 방식 유지
-        response = LLM_Base_Simple(fullPrompt, temperature, maxTokens, model, baseUrl, apiKey)
-    End If
+    response = LLM_Dispatcher(fullPrompt, "", temperature, maxTokens, model, baseUrl, apiKey)
     
+    ' 응답 처리 및 반환
     LLM = ProcessLLMResponse(response, showThink)
 End Function
 
 Function LLM_SUMMARIZE(text As String, Optional prompt As String = "", Optional temperature As Variant, _
                      Optional maxTokens As Variant, Optional model As Variant, Optional baseUrl As Variant, _
                      Optional showThink As Boolean = False, Optional apiKey As Variant) As Variant
+    ' 프롬프트 구성
     If prompt = "" Then
         prompt = "Summarize in one line:"
     End If
     Dim fullPrompt As String
     fullPrompt = prompt & " " & text
     
-    ' Anthropic 모델인지 확인
-    Dim isAnthropicModel As Boolean
-    isAnthropicModel = False
-    
-    If Not IsMissing(model) And Not IsEmpty(model) Then
-        If InStr(LCase(CStr(model)), "claude") > 0 Then
-            isAnthropicModel = True
-        End If
-    End If
-    
-    Dim isAnthropicUrl As Boolean
-    isAnthropicUrl = False
-    
-    If Not IsMissing(baseUrl) And Not IsEmpty(baseUrl) Then
-        If InStr(LCase(CStr(baseUrl)), "anthropic") > 0 Then
-            isAnthropicUrl = True
-        End If
-    End If
-    
+    ' LLM 디스패처를 통해 요청 처리
     Dim response As String
-    If isAnthropicModel Or isAnthropicUrl Then
-        ' Anthropic API 사용
-        response = LLM_Base_Anthropic("", fullPrompt, temperature, maxTokens, model, apiKey)
-    Else
-        ' 기존 방식 유지
-        response = LLM_Base_Simple(fullPrompt, temperature, maxTokens, model, baseUrl, apiKey)
-    End If
+    response = LLM_Dispatcher(fullPrompt, "", temperature, maxTokens, model, baseUrl, apiKey)
     
+    ' 응답 처리 및 반환
     LLM_SUMMARIZE = ProcessLLMResponse(response, showThink)
 End Function
 
 Function LLM_CODE(programDetails As String, programmingLanguage As String, _
                   Optional model As Variant, Optional baseUrl As Variant, _
                   Optional showThink As Boolean = False, Optional apiKey As Variant) As Variant
+    ' 프롬프트 구성
     Dim prompt As String
     prompt = "Generate a " & programmingLanguage & " program that fulfills the following requirements:" & vbCrLf & programDetails
     
-    ' Anthropic 모델인지 확인
-    Dim isAnthropicModel As Boolean
-    isAnthropicModel = False
-    
-    If Not IsMissing(model) And Not IsEmpty(model) Then
-        If InStr(LCase(CStr(model)), "claude") > 0 Then
-            isAnthropicModel = True
-        End If
-    End If
-    
-    Dim isAnthropicUrl As Boolean
-    isAnthropicUrl = False
-    
-    If Not IsMissing(baseUrl) And Not IsEmpty(baseUrl) Then
-        If InStr(LCase(CStr(baseUrl)), "anthropic") > 0 Then
-            isAnthropicUrl = True
-        End If
-    End If
-    
+    ' LLM 디스패처를 통해 요청 처리 (코드 생성에는 낮은 temperature 사용)
     Dim response As String
-    If isAnthropicModel Or isAnthropicUrl Then
-        ' Anthropic API 사용
-        response = LLM_Base_Anthropic("", prompt, 0.2, , model, apiKey)
-    Else
-        ' 기존 방식 유지
-        response = LLM_Base_Simple(prompt, 0.2, , model, baseUrl, apiKey)
-    End If
+    response = LLM_Dispatcher(prompt, "", 0.2, , model, baseUrl, apiKey)
     
+    ' 응답 처리 및 반환
     LLM_CODE = ProcessLLMResponse(response, showThink)
 End Function
 
+Function LLM_LIST(prompt As String, Optional model As Variant, Optional baseUrl As Variant, _
+                  Optional showThink As Boolean = False, Optional apiKey As Variant) As Variant
+    ' 프롬프트 구성
+    Dim listPrompt As String
+    listPrompt = prompt & vbCrLf & _
+                 "Example:" & vbCrLf & _
+                 "<list><item>Apple</item><item>Banana</item><item>Cherry</item></list>" & vbCrLf & _
+                 "Please output only the list items enclosed within <list> and <item> tags, exactly in the above format, with no additional commentary."
+    
+    ' LLM 디스패처를 통해 요청 처리
+    Dim response As String
+    response = LLM_Dispatcher(listPrompt, "", , , model, baseUrl, apiKey)
+    
+    ' 응답 처리
+    Dim processedResponse As Variant
+    processedResponse = ProcessLLMResponse(response, showThink)
+    
+    Dim contentText As String, thinkText As String
+    If showThink Then
+        thinkText = processedResponse(0)
+        contentText = processedResponse(1)
+    Else
+        contentText = processedResponse
+    End If
+    
+    ' <item> 태그 사이의 리스트 항목들을 추출
+    Dim items() As String
+    Dim itemCount As Long
+    itemCount = 0
+    Dim searchPos As Long, startPos As Long, endPos As Long, currentItem As String
+    searchPos = 1
+    Do
+        startPos = InStr(searchPos, contentText, "<item>")
+        If startPos = 0 Then Exit Do
+        endPos = InStr(startPos, contentText, "</item>")
+        If endPos = 0 Then Exit Do
+        currentItem = Mid(contentText, startPos + Len("<item>"), endPos - startPos - Len("<item>"))
+        currentItem = Trim(currentItem)
+        ReDim Preserve items(itemCount)
+        items(itemCount) = currentItem
+        itemCount = itemCount + 1
+        searchPos = endPos + Len("</item>")
+    Loop
+    
+    ' showThink 옵션에 따라 결과 배열 반환
+    If showThink Then
+        Dim resultArray(1) As Variant
+        resultArray(0) = thinkText
+        resultArray(1) = items
+        LLM_LIST = resultArray
+    Else
+        LLM_LIST = items
+    End If
+End Function
